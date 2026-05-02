@@ -4,9 +4,32 @@ This guide is written for a first-time deployment using:
 
 - GitHub account: <https://github.com/cpignanelli>
 - Posit Connect Cloud account: <https://connect.posit.cloud/cpignanelli1994>
+- Current live app URL: <https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/>
 - Local project folder: `/Users/chrispignanelli/Documents/New project 2`
 
 The free Posit Connect Cloud plan requires a **public GitHub repository** for this workflow. Do not put real participant data, secrets, or the local SQLite database in GitHub.
+
+## Current Live Pilot Settings
+
+In Posit Connect Cloud, the app should have these environment variables:
+
+```text
+SQLITE_DB_PATH=data/app.sqlite
+APP_BASE_URL=https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/
+POLL_CREATION_SECRET=<your-private-creation-secret>
+```
+
+Use the exact live URL above for `APP_BASE_URL`, including the trailing `/`.
+
+Do not commit the real value of `POLL_CREATION_SECRET` to GitHub. If you used an example value from an earlier draft of this guide, change it in Posit Connect Cloud to a new private value before sharing the app.
+
+Your private poll creation URL is:
+
+```text
+https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/?create=<your-private-creation-secret>
+```
+
+Share only the generated participant `?respond=<token>` links with colleagues. Keep both the creation URL and generated admin links private.
 
 ## What You Are Publishing
 
@@ -161,6 +184,15 @@ git branch -M main
 git push -u origin main
 ```
 
+After the first push, future updates are simpler:
+
+```sh
+git status --short --ignored
+git add app.R manifest.json renv.lock R www data/.gitkeep scripts tests README.md CONNECT_CLOUD_DEPLOYMENT_GUIDE.md .gitignore .rscignore .Renviron.example
+git commit -m "Update meeting availability poll app"
+git push
+```
+
 After pushing, open:
 
 ```text
@@ -206,10 +238,10 @@ Use this exactly:
 SQLITE_DB_PATH=data/app.sqlite
 ```
 
-Choose a private creation secret. Example:
+Choose a private creation secret, but do not put the real value in GitHub:
 
 ```text
-POLL_CREATION_SECRET=poll-create-2026-private-test-cp
+POLL_CREATION_SECRET=<your-private-creation-secret>
 ```
 
 This secret keeps random public visitors from creating polls. Do not put this value in GitHub.
@@ -217,7 +249,7 @@ This secret keeps random public visitors from creating polls. Do not put this va
 If Connect Cloud already shows the final app URL, also add:
 
 ```text
-APP_BASE_URL=https://your-connect-cloud-app-url/
+APP_BASE_URL=https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/
 ```
 
 If you do not know the final app URL yet, skip `APP_BASE_URL` for now. You will add it after the first publish.
@@ -245,10 +277,10 @@ The app needs `APP_BASE_URL` so the generated participant/admin links use the pu
 4. Add:
 
 ```text
-APP_BASE_URL=https://your-connect-cloud-app-url/
+APP_BASE_URL=https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/
 ```
 
-Use the real app URL you copied after publishing.
+Use the exact app URL above, including the trailing `/`.
 
 5. Save.
 6. Republish or restart the content.
@@ -258,7 +290,7 @@ Use the real app URL you copied after publishing.
 Use the private creation URL:
 
 ```text
-https://your-connect-cloud-app-url/?create=poll-create-2026-private-test-cp
+https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/?create=<your-private-creation-secret>
 ```
 
 Replace the secret with whatever value you set in `POLL_CREATION_SECRET`.

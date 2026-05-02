@@ -4,6 +4,14 @@ A modular R/Shiny application for creating manual meeting availability polls acr
 
 For a beginner-friendly GitHub and Posit Connect Cloud deployment walkthrough, see `CONNECT_CLOUD_DEPLOYMENT_GUIDE.md`.
 
+Current live pilot URL:
+
+```text
+https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/
+```
+
+Keep the real `POLL_CREATION_SECRET` value only in Posit Connect Cloud environment variables. Do not commit it to GitHub.
+
 ## User workflow
 
 1. The organizer creates a poll with meeting details, duration, time zone, proposed times, optional location details, optional deadline, and optional expected participants.
@@ -244,13 +252,13 @@ BookingApp/
 
 ```text
 SQLITE_DB_PATH=data/app.sqlite
-POLL_CREATION_SECRET=choose-a-long-random-value
+POLL_CREATION_SECRET=<your-private-creation-secret>
 ```
 
 If Connect Cloud shows the final public URL before publish, also set:
 
 ```text
-APP_BASE_URL=https://your-connect-cloud-content-url/
+APP_BASE_URL=https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/
 ```
 
 If you do not know the URL yet, publish first, copy the deployed URL, then add `APP_BASE_URL` in the content settings and republish/restart.
@@ -258,7 +266,7 @@ If you do not know the URL yet, publish first, copy the deployed URL, then add `
 10. Create polls with:
 
 ```text
-https://your-connect-cloud-content-url/?create=choose-a-long-random-value
+https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/?create=<your-private-creation-secret>
 ```
 
 11. Share only the generated `?respond=<token>` participant link with your colleague. Keep the generated `?admin=<token>` organizer link private.

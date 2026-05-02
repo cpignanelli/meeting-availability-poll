@@ -1,12 +1,16 @@
 # Local proof-of-concept settings
 APP_BASE_URL=http://127.0.0.1:3838
+
+# Live Posit Connect Cloud pilot URL:
+# APP_BASE_URL=https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/
+
 APP_HOST=127.0.0.1
 APP_PORT=3838
 SQLITE_DB_PATH=data/app.sqlite
 
 # Optional: restrict poll creation on public pilot deployments.
 # If set, create polls at ?create=<this-value>. Participant/admin links do not need it.
-POLL_CREATION_SECRET=replace-with-a-long-random-value
+POLL_CREATION_SECRET=replace-with-a-private-random-value
 
 # Future hosted database settings. Do not commit real values.
 # DATABASE_URL=
