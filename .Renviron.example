@@ -1,0 +1,17 @@
+# Local proof-of-concept settings
+APP_BASE_URL=http://127.0.0.1:3838
+APP_HOST=127.0.0.1
+APP_PORT=3838
+SQLITE_DB_PATH=data/app.sqlite
+
+# Optional: restrict poll creation on public pilot deployments.
+# If set, create polls at ?create=<this-value>. Participant/admin links do not need it.
+POLL_CREATION_SECRET=replace-with-a-long-random-value
+
+# Future hosted database settings. Do not commit real values.
+# DATABASE_URL=
+# DB_HOST=
+# DB_NAME=
+# DB_USER=
+# DB_PASSWORD=
+# DB_PORT=

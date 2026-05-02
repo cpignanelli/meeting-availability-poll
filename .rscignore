@@ -1,0 +1,9 @@
+.DS_Store
+.Renviron
+.Rhistory
+.RData
+BookingApp
+data/app.sqlite
+tests
+scripts/reset_local_db.R
+scripts/deploy_posit_connect.R

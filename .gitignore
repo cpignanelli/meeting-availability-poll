@@ -1,0 +1,14 @@
+data/*.sqlite
+data/*.sqlite-journal
+data/*.db
+.Renviron
+.Rhistory
+.RData
+.DS_Store
+.Rproj.user/
+renv/library/
+renv/staging/
+*.Rproj
+.Rproj.user
+.positai
+BookingApp/
