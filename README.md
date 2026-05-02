@@ -18,9 +18,21 @@ Keep the real `POLL_CREATION_SECRET` value only in Posit Connect Cloud environme
 2. The app generates two links:
    - Public response link: `?respond=<token>`
    - Private organizer link: `?admin=<token>`
-3. Participants submit name, email, organization, availability for each option, and optional comments.
-4. The organizer reviews summary cards, ranked slots, a heatmap, responses, missing expected participants, and CSV exports.
+3. Participants submit name, email, organization, availability for each option, and optional comments through a Doodle-like voting grid.
+4. The organizer reviews a decision-focused dashboard with the recommended time, response progress, ranked slots, a heatmap, responses, missing expected participants, and CSV exports.
 5. The organizer selects the final time, generates copy-ready final email text, optionally downloads an `.ics` file, and closes the poll.
+
+## User experience
+
+The app uses a minimal white interface with near-black text and restrained cardinal red accents. The public participant page is intentionally simple:
+
+- meeting summary first;
+- privacy notice before data entry;
+- one compact availability choice row per proposed time;
+- explicit labels for "Available and preferred", "Available", and "Unavailable";
+- no public access to results, expected participant lists, or organizer-only details.
+
+The organizer dashboard is optimized for deciding quickly: the top section shows the best-ranked option, response progress, shareable participant link, ranked options, heatmap, exports, and finalization controls.
 
 ## Required R packages
 
@@ -79,10 +91,11 @@ From the project root:
 shiny::runApp()
 ```
 
-The default create-poll page is `/`. Generated links use query-string routing:
+Generated links use query-string routing:
 
 - `?respond=<response_token>` for participants
 - `?admin=<admin_token>` for the organizer
+- `?create=<POLL_CREATION_SECRET>` for poll creation when `POLL_CREATION_SECRET` is set
 
 For link generation outside RStudio, set `APP_BASE_URL` in `.Renviron`:
 
@@ -92,6 +105,8 @@ SQLITE_DB_PATH=data/app.sqlite
 ```
 
 Use `.Renviron.example` as a template. Do not commit `.Renviron`.
+
+If `POLL_CREATION_SECRET` is not set, `/` opens the create-poll page for local development. If `POLL_CREATION_SECRET` is set, `/` shows a locked-page message and poll creation requires the private `?create=` URL.
 
 ## Sharing a live proof of concept
 
@@ -383,7 +398,7 @@ Before production use:
 
 Files to commit:
 
-- Source code under `R/`, `app.R`, scripts, tests, README, `.Renviron.example`, `.gitignore`, `.rscignore`, `renv.lock`, `data/.gitkeep`, and `www/custom.css`.
+- Source code under `R/`, `app.R`, scripts, tests, README, `.Renviron.example`, `.gitignore`, `.rscignore`, `renv.lock`, `data/.gitkeep`, and files under `www/`.
 - After your first Posit Connect deployment, the generated `rsconnect/` deployment record can also be committed; it identifies the Connect server/content target and does not contain private secrets.
 
 Files not to commit:

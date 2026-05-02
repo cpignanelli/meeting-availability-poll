@@ -1,69 +1,79 @@
 create_poll_ui <- function(id) {
   ns <- shiny::NS(id)
-  shiny::tagList(
+  shiny::div(
+    class = "app-shell organizer-shell",
+    page_header_ui(
+      eyebrow = "Organizer setup",
+      title = "Create a meeting availability poll",
+      subtitle = "Propose a few times manually, share one response link, and keep the private organizer link for results."
+    ),
+    shiny::uiOutput(ns("created_links")),
     shiny::div(
-      class = "app-shell",
+      class = "create-layout",
       shiny::div(
-        class = "app-header",
-        shiny::h1("Create a meeting availability poll"),
-        shiny::p("Manually propose meeting times, share a response link, and review availability through a private organizer dashboard.")
-      ),
-      shiny::uiOutput(ns("created_links")),
-      shiny::div(
-        class = "section-card",
-        shiny::h2("Meeting details"),
-        shiny::fluidRow(
-          shiny::column(7, shiny::textInput(ns("title"), "Meeting title", placeholder = "Performance working group planning meeting")),
-          shiny::column(5, shiny::numericInput(ns("duration_minutes"), "Duration in minutes", value = 60, min = 5, max = 1440, step = 5))
-        ),
-        shiny::textAreaInput(ns("description"), "Description/context", rows = 3, placeholder = "Briefly describe the purpose of the meeting."),
-        shiny::fluidRow(
-          shiny::column(6, shiny::textInput(ns("organizer_name"), "Organizer name")),
-          shiny::column(6, shiny::textInput(ns("organizer_email"), "Organizer email"))
-        ),
-        shiny::fluidRow(
-          shiny::column(
-            6,
-            shiny::selectInput(
-              ns("timezone"),
-              "Time zone",
-              choices = OlsonNames(),
-              selected = if ("America/Toronto" %in% OlsonNames()) "America/Toronto" else Sys.timezone()
-            )
+        class = "create-main",
+        section_panel_ui(
+          "1. Meeting basics",
+          "Keep this short and recognizable. Participants will see these details before choosing availability.",
+          shiny::fluidRow(
+            shiny::column(7, shiny::textInput(ns("title"), "Meeting title", placeholder = "Performance working group planning meeting")),
+            shiny::column(5, shiny::numericInput(ns("duration_minutes"), "Duration in minutes", value = 60, min = 5, max = 1440, step = 5))
           ),
-          shiny::column(6, shiny::dateInput(ns("response_deadline"), "Optional response deadline", value = NULL))
-        ),
-        shiny::fluidRow(
-          shiny::column(
-            4,
-            shiny::selectInput(ns("location_type"), "Location type", choices = c("To be determined", "Virtual", "In person", "Hybrid"))
+          shiny::textAreaInput(ns("description"), "Description/context", rows = 3, placeholder = "Briefly describe the purpose of the meeting."),
+          shiny::fluidRow(
+            shiny::column(6, shiny::textInput(ns("organizer_name"), "Organizer name")),
+            shiny::column(6, shiny::textInput(ns("organizer_email"), "Organizer email"))
           ),
-          shiny::column(8, shiny::textInput(ns("location_details"), "Optional location or virtual meeting details"))
+          shiny::fluidRow(
+            shiny::column(
+              6,
+              shiny::selectInput(
+                ns("timezone"),
+                "Time zone",
+                choices = OlsonNames(),
+                selected = if ("America/Toronto" %in% OlsonNames()) "America/Toronto" else Sys.timezone()
+              )
+            ),
+            shiny::column(6, shiny::dateInput(ns("response_deadline"), "Optional response deadline", value = NULL))
+          ),
+          shiny::fluidRow(
+            shiny::column(4, shiny::selectInput(ns("location_type"), "Location type", choices = c("To be determined", "Virtual", "In person", "Hybrid"))),
+            shiny::column(8, shiny::textInput(ns("location_details"), "Optional location or virtual meeting details"))
+          )
+        ),
+        section_panel_ui(
+          "2. Proposed times",
+          "Enter local times in the selected time zone using 24-hour HH:MM format. Add several realistic options so participants can compare them quickly.",
+          shiny::uiOutput(ns("time_options_ui")),
+          shiny::div(
+            class = "button-row",
+            shiny::actionButton(ns("add_option"), "Add time", class = "btn-outline-secondary"),
+            shiny::actionButton(ns("remove_option"), "Remove last", class = "btn-outline-secondary")
+          ),
+          shiny::uiOutput(ns("time_preview"))
+        ),
+        section_panel_ui(
+          "3. People and instructions",
+          "Expected participants are optional and visible only in the private organizer dashboard.",
+          shiny::textAreaInput(
+            ns("expected_participants"),
+            "Expected participant list",
+            rows = 5,
+            placeholder = "Alex Lee,alex@example.org,Institute A,yes\nSam Patel,sam@example.org,Partner Org,no"
+          ),
+          shiny::uiOutput(ns("expected_preview")),
+          shiny::textAreaInput(ns("notes"), "Optional notes/instructions for participants", rows = 3, placeholder = "Add context participants need before responding.")
         )
       ),
-      shiny::div(
-        class = "section-card",
-        shiny::h2("Proposed times"),
-        shiny::p(class = "helper-text", "Enter local times in the selected time zone using 24-hour HH:MM format."),
-        shiny::uiOutput(ns("time_options_ui")),
-        shiny::div(
-          class = "d-flex gap-2 flex-wrap",
-          shiny::actionButton(ns("add_option"), "Add time", class = "btn-outline-secondary"),
-          shiny::actionButton(ns("remove_option"), "Remove last", class = "btn-outline-secondary")
-        )
-      ),
-      shiny::div(
-        class = "section-card",
-        shiny::h2("Expected participants"),
-        shiny::p(class = "helper-text", "Optional. Paste one participant per line as: name,email,organization,required. Use yes/no for required."),
-        shiny::textAreaInput(
-          ns("expected_participants"),
-          "Expected participant list",
-          rows = 5,
-          placeholder = "Alex Lee,alex@example.org,Institute A,yes\nSam Patel,sam@example.org,Partner Org,no"
+      shiny::tags$aside(
+        class = "create-sidebar",
+        section_panel_ui(
+          "4. Review",
+          "Create the poll when the essentials are ready. The private organizer link is shown once after creation.",
+          shiny::uiOutput(ns("create_readiness")),
+          shiny::actionButton(ns("create_poll"), "Create poll", class = "btn-primary btn-lg create-submit")
         ),
-        shiny::textAreaInput(ns("notes"), "Optional notes/instructions for participants", rows = 3),
-        shiny::actionButton(ns("create_poll"), "Create poll", class = "btn-primary")
+        privacy_notice_ui(compact = TRUE)
       )
     )
   )
@@ -82,11 +92,35 @@ create_poll_server <- function(id, conn) {
       option_count(max(option_count() - 1L, 1L))
     })
 
+    collect_time_options <- function(timezone, duration) {
+      rows <- lapply(seq_len(option_count()), function(i) {
+        start_local <- parse_local_datetime(input[[paste0("option_date_", i)]], input[[paste0("option_time_", i)]], timezone)
+        end_local <- add_minutes(start_local, duration)
+        data.frame(
+          start_datetime = as_utc_string(start_local),
+          end_datetime = as_utc_string(end_local),
+          display_label = format_option_label(as_utc_string(start_local), as_utc_string(end_local), timezone),
+          option_order = i,
+          stringsAsFactors = FALSE
+        )
+      })
+      options <- do.call(rbind, rows)
+      options <- options[!duplicated(options[c("start_datetime", "end_datetime")]), , drop = FALSE]
+      options$option_order <- seq_len(nrow(options))
+      rownames(options) <- NULL
+      options
+    }
+
     output$time_options_ui <- shiny::renderUI({
       ns <- session$ns
       rows <- lapply(seq_len(option_count()), function(i) {
         shiny::div(
           class = "time-option-row",
+          shiny::div(
+            class = "time-option-index",
+            shiny::span("Option"),
+            shiny::strong(i)
+          ),
           shiny::dateInput(ns(paste0("option_date_", i)), paste("Date", i), value = Sys.Date() + i),
           shiny::textInput(ns(paste0("option_time_", i)), paste("Start time", i), value = if (i == 1) "09:00" else if (i == 2) "11:00" else "14:00")
         )
@@ -94,18 +128,95 @@ create_poll_server <- function(id, conn) {
       shiny::tagList(rows)
     })
 
+    output$time_preview <- shiny::renderUI({
+      if (is.null(input$timezone) || is.null(input$duration_minutes)) {
+        return(NULL)
+      }
+
+      preview <- tryCatch({
+        timezone <- validate_timezone(input$timezone)
+        duration <- validate_duration(input$duration_minutes)
+        collect_time_options(timezone, duration)
+      }, error = function(e) {
+        return(NULL)
+      })
+
+      if (is.null(preview) || nrow(preview) == 0) {
+        return(shiny::p(class = "helper-text", "A preview will appear after valid dates and times are entered."))
+      }
+
+      shiny::div(
+        class = "time-preview",
+        shiny::div(class = "preview-label", "Participant preview"),
+        lapply(seq_len(nrow(preview)), function(i) {
+          shiny::div(
+            class = "time-preview-item",
+            shiny::span(class = "time-preview-number", i),
+            shiny::span(preview$display_label[[i]])
+          )
+        })
+      )
+    })
+
+    output$expected_preview <- shiny::renderUI({
+      text <- input$expected_participants %||% ""
+      if (!nzchar(trimws(text))) {
+        return(shiny::p(class = "helper-text", "No expected participant list added. You can still share the poll with anyone who has the public response link."))
+      }
+
+      parsed <- tryCatch(parse_expected_participants(text), error = function(e) e)
+      if (inherits(parsed, "error")) {
+        return(validation_summary_ui(safe_error_message(parsed)))
+      }
+      build_expected_preview_table(parsed)
+    })
+
+    output$create_readiness <- shiny::renderUI({
+      missing <- character()
+      if (!nzchar(trimws(input$title %||% ""))) missing <- c(missing, "Meeting title")
+      if (!nzchar(trimws(input$organizer_name %||% ""))) missing <- c(missing, "Organizer name")
+      if (!nzchar(trimws(input$organizer_email %||% ""))) missing <- c(missing, "Organizer email")
+
+      valid_times <- tryCatch({
+        timezone <- validate_timezone(input$timezone)
+        duration <- validate_duration(input$duration_minutes)
+        options <- collect_time_options(timezone, duration)
+        nrow(options)
+      }, error = function(e) 0L)
+
+      if (valid_times == 0L) {
+        missing <- c(missing, "At least one valid proposed time")
+      }
+
+      if (length(missing) > 0) {
+        return(shiny::div(
+          class = "readiness-list",
+          shiny::p(class = "helper-text", "Still needed:"),
+          shiny::tags$ul(lapply(missing, shiny::tags$li))
+        ))
+      }
+
+      shiny::div(
+        class = "ready-box",
+        shiny::strong("Ready to create"),
+        shiny::p(paste(valid_times, "proposed time", if (valid_times == 1L) "slot" else "slots", "will be included."))
+      )
+    })
+
     output$created_links <- shiny::renderUI({
       info <- created()
       if (is.null(info)) {
         return(NULL)
       }
-      shiny::div(
-        class = "section-card link-box",
-        shiny::h2("Poll created"),
-        shiny::p("Share the public response link with participants. Keep the private organizer link restricted to the organizer."),
-        shiny::textAreaInput(session$ns("response_link_display"), "Public response link", value = info$response_link, rows = 2, width = "100%"),
-        shiny::textAreaInput(session$ns("admin_link_display"), "Private organizer link", value = info$admin_link, rows = 2, width = "100%"),
-        shiny::p(class = "helper-text", "The private link is the only way to view results in this prototype. It is shown once here and stored only as a hash.")
+      section_panel_ui(
+        "Poll created",
+        "Share the public response link with participants. Keep the private organizer link restricted to the organizer.",
+        shiny::div(
+          class = "link-box",
+          copy_field_ui(session$ns("response_link_copy"), "Public response link", info$response_link, "Participants can only submit availability from this link."),
+          copy_field_ui(session$ns("admin_link_copy"), "Private organizer link", info$admin_link, sensitive = TRUE),
+          shiny::p(class = "helper-text", "The private link is shown here as a raw token only once. The app stores only its hash.")
+        )
       )
     })
 
@@ -116,9 +227,8 @@ create_poll_server <- function(id, conn) {
         timezone <- validate_timezone(input$timezone)
         description <- sanitize_text(input$description, max_chars = 2000)
         notes <- sanitize_text(input$notes, max_chars = 2000)
-        if (nzchar(notes)) {
-          description <- paste(c(description, paste0("Participant instructions: ", notes)), collapse = "\n\n")
-        }
+        description_parts <- c(description, if (nzchar(notes)) paste0("Participant instructions: ", notes) else "")
+        description <- paste(description_parts[nzchar(description_parts)], collapse = "\n\n")
         organizer_name <- sanitize_text(input$organizer_name, max_chars = 160, required = TRUE, field = "Organizer name")
         organizer_email <- validate_email(input$organizer_email, field = "Organizer email")
         location_type <- sanitize_text(input$location_type, max_chars = 80)
@@ -126,19 +236,7 @@ create_poll_server <- function(id, conn) {
         response_deadline <- input$response_deadline
         response_deadline <- if (is.null(response_deadline) || is.na(response_deadline)) "" else as.character(response_deadline)
 
-        options <- lapply(seq_len(option_count()), function(i) {
-          start_local <- parse_local_datetime(input[[paste0("option_date_", i)]], input[[paste0("option_time_", i)]], timezone)
-          end_local <- add_minutes(start_local, duration)
-          data.frame(
-            start_datetime = as_utc_string(start_local),
-            end_datetime = as_utc_string(end_local),
-            display_label = format_option_label(as_utc_string(start_local), as_utc_string(end_local), timezone),
-            option_order = i,
-            stringsAsFactors = FALSE
-          )
-        })
-        options <- do.call(rbind, options)
-        options <- unique(options)
+        options <- collect_time_options(timezone, duration)
         if (nrow(options) == 0) {
           stop("Add at least one proposed meeting time.", call. = FALSE)
         }
@@ -168,4 +266,35 @@ create_poll_server <- function(id, conn) {
       })
     })
   })
+}
+
+build_expected_preview_table <- function(expected) {
+  if (nrow(expected) == 0) {
+    return(shiny::p(class = "helper-text", "No expected participant list added."))
+  }
+
+  rows <- lapply(seq_len(nrow(expected)), function(i) {
+    shiny::tags$tr(
+      shiny::tags$td(expected$name[[i]]),
+      shiny::tags$td(expected$email[[i]]),
+      shiny::tags$td(expected$organization[[i]]),
+      shiny::tags$td(if (expected$is_required[[i]] == 1L) "Required" else "Optional")
+    )
+  })
+
+  shiny::div(
+    class = "preview-table-wrap",
+    shiny::tags$table(
+      class = "preview-table",
+      shiny::tags$thead(
+        shiny::tags$tr(
+          shiny::tags$th("Name"),
+          shiny::tags$th("Email"),
+          shiny::tags$th("Organization"),
+          shiny::tags$th("Required")
+        )
+      ),
+      shiny::tags$tbody(rows)
+    )
+  )
 }

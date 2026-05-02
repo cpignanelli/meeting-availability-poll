@@ -2538,7 +2538,7 @@
   },
   "files": {
     "app.R": {
-      "checksum": "4b89afe0a380761e7c3bdd4755f16cbd"
+      "checksum": "d17f7ad652d5aa192b3ac969778037e3"
     },
     "data/.gitkeep": {
       "checksum": "68b329da9893e34099c7d8ad5cb9c940"
@@ -2553,16 +2553,16 @@
       "checksum": "8c40ac6a536715e8616778395b1d45a0"
     },
     "R/modules/mod_admin_dashboard.R": {
-      "checksum": "5fc96063aee27106a310345092144a6b"
+      "checksum": "5675ecf9a2c6997fc2f7c4882fc712ad"
     },
     "R/modules/mod_create_poll.R": {
-      "checksum": "af10c1e5367569f061d769b0a5aceaa8"
+      "checksum": "c97336a00f6110f9c9f16ac9592ba5af"
     },
     "R/modules/mod_finalize_poll.R": {
-      "checksum": "9d5fa45ca26ef038542720cdf7ae79d3"
+      "checksum": "4426a66381bd2131f7758293ea0f0e62"
     },
     "R/modules/mod_respond_poll.R": {
-      "checksum": "a3ffa9bc29fef2d492826ea574c301f2"
+      "checksum": "84d26dd35bd70b39c592676880a8b63a"
     },
     "R/styles/app_theme.R": {
       "checksum": "ad1737168f7cb678959535acce440d51"
@@ -2579,14 +2579,20 @@
     "R/utils/time_helpers.R": {
       "checksum": "64d58b833e4f2d183fffcd9dd2f21e86"
     },
+    "R/utils/ui_helpers.R": {
+      "checksum": "05e39d1052af106c385a5c19b167f848"
+    },
     "R/utils/validation.R": {
-      "checksum": "2be752ddeb0d71e4fe25d1b762105c8e"
+      "checksum": "09467222d10d83efa20254d08128ce74"
     },
     "renv.lock": {
       "checksum": "1822388796418c01fe499edc0fb00438"
     },
+    "www/app.js": {
+      "checksum": "5e35118884c9c46280952c56bcc52005"
+    },
     "www/custom.css": {
-      "checksum": "5ba079375fbab32773761743b8c2efd0"
+      "checksum": "734462c46995dd2510b4e92cec7f117b"
     }
   },
   "users": null

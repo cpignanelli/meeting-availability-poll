@@ -136,6 +136,14 @@ build_app_link <- function(session, parameter, token) {
   paste0(sub("/+$", "", base_url), separator, parameter, "=", token)
 }
 
+can_create_poll <- function(params, creation_secret = Sys.getenv("POLL_CREATION_SECRET", unset = "")) {
+  if (!nzchar(creation_secret)) {
+    return(TRUE)
+  }
+  supplied_secret <- params[["create"]] %||% ""
+  identical(supplied_secret, creation_secret)
+}
+
 safe_error_message <- function(error) {
   message <- conditionMessage(error)
   if (!nzchar(message)) {

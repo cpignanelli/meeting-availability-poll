@@ -3,6 +3,7 @@ source("R/utils/validation.R", local = TRUE)
 source("R/utils/scoring.R", local = TRUE)
 source("R/utils/ics_helpers.R", local = TRUE)
 source("R/utils/email_text_helpers.R", local = TRUE)
+source("R/utils/ui_helpers.R", local = TRUE)
 source("R/db/db_schema.R", local = TRUE)
 source("R/db/db_connect.R", local = TRUE)
 source("R/db/db_queries.R", local = TRUE)
@@ -31,6 +32,7 @@ ui <- bslib::page_fluid(
   theme = app_theme(),
   shiny::tags$head(
     shiny::includeCSS("www/custom.css"),
+    shiny::includeScript("www/app.js"),
     shiny::tags$meta(name = "viewport", content = "width=device-width, initial-scale=1")
   ),
   shiny::uiOutput("route_ui")
@@ -47,8 +49,13 @@ server <- function(input, output, session) {
       respond_poll_ui("respond")
     } else if (!is.null(params$admin) && nzchar(params$admin)) {
       admin_dashboard_ui("admin")
-    } else {
+    } else if (can_create_poll(params)) {
       create_poll_ui("create")
+    } else {
+      empty_state_ui(
+        "Poll creation is private",
+        "This public deployment requires a private creation link. Participant response links and organizer links still work normally."
+      )
     }
   })
 

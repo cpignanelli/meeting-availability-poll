@@ -1,16 +1,26 @@
 finalize_poll_ui <- function(id) {
   ns <- shiny::NS(id)
-  shiny::div(
-    class = "section-card",
-    shiny::h2("Finalize meeting"),
-    shiny::uiOutput(ns("final_option_ui")),
-    shiny::textAreaInput(ns("final_notes"), "Optional final notes", rows = 3),
-    shiny::uiOutput(ns("email_preview_ui")),
+  section_panel_ui(
+    "Finalize meeting",
+    "Choose the final time, prepare the email text, and close the poll when the decision is made.",
+    shiny::uiOutput(ns("final_status")),
     shiny::div(
-      class = "d-flex gap-2 flex-wrap",
-      shiny::downloadButton(ns("download_ics"), "Download .ics file", class = "btn-outline-secondary"),
-      shiny::actionButton(ns("finalize"), "Finalize and close poll", class = "btn-primary"),
-      shiny::actionButton(ns("close_poll"), "Close without finalizing", class = "btn-outline-secondary")
+      class = "finalize-layout",
+      shiny::div(
+        class = "finalize-controls",
+        shiny::uiOutput(ns("final_option_ui")),
+        shiny::textAreaInput(ns("final_notes"), "Optional final notes", rows = 3, placeholder = "Add agenda, joining instructions, or follow-up context."),
+        shiny::div(
+          class = "button-row",
+          shiny::downloadButton(ns("download_ics"), "Download .ics file", class = "btn-outline-secondary"),
+          shiny::actionButton(ns("finalize"), "Finalize and close poll", class = "btn-primary"),
+          shiny::actionButton(ns("close_poll"), "Close without finalizing", class = "btn-outline-secondary")
+        )
+      ),
+      shiny::div(
+        class = "finalize-preview",
+        shiny::uiOutput(ns("email_preview_ui"))
+      )
     )
   )
 }
@@ -24,6 +34,18 @@ finalize_poll_server <- function(id, conn, dashboard_data, refresh) {
       }
       option <- data$options[data$options$option_id == as.integer(input$selected_option_id), , drop = FALSE]
       if (nrow(option) == 0) NULL else option
+    })
+
+    output$final_status <- shiny::renderUI({
+      data <- dashboard_data()
+      if (is.null(data) || is.null(data$finalized)) {
+        return(NULL)
+      }
+      shiny::div(
+        class = "ready-box",
+        shiny::strong("This poll has been finalized."),
+        shiny::p(paste("Selected time:", data$finalized$display_label[[1]]))
+      )
     })
 
     output$final_option_ui <- shiny::renderUI({
@@ -44,8 +66,26 @@ finalize_poll_server <- function(id, conn, dashboard_data, refresh) {
       }
       text <- generate_final_email_text(data$poll, option, input$final_notes %||% "")
       shiny::tagList(
-        shiny::label("Copy-ready final meeting email text"),
-        shiny::tags$textarea(class = "form-control copy-text", rows = 10, readonly = "readonly", text)
+        shiny::div(
+          class = "email-preview-heading",
+          shiny::div(
+            shiny::span(class = "option-kicker", "Copy-ready email"),
+            shiny::h3("Final meeting message")
+          ),
+          shiny::tags$button(
+            type = "button",
+            class = "btn btn-outline-secondary copy-button",
+            `data-copy-target` = session$ns("email_preview"),
+            "Copy"
+          )
+        ),
+        shiny::tags$textarea(
+          id = session$ns("email_preview"),
+          class = "form-control copy-text",
+          rows = 12,
+          readonly = "readonly",
+          text
+        )
       )
     })
 

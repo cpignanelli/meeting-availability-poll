@@ -1,7 +1,7 @@
 respond_poll_ui <- function(id) {
   ns <- shiny::NS(id)
   shiny::div(
-    class = "app-shell",
+    class = "app-shell respondent-shell",
     shiny::uiOutput(ns("respond_page"))
   )
 }
@@ -29,6 +29,32 @@ respond_poll_server <- function(id, conn, token) {
       })
     })
 
+    output$completion_status <- shiny::renderUI({
+      bundle <- poll_bundle()
+      if (!is.null(bundle$error) || is.null(bundle$options)) {
+        return(NULL)
+      }
+      options <- bundle$options
+      total <- nrow(options)
+      answered <- sum(vapply(options$option_id, function(option_id) {
+        nzchar(input[[paste0("availability_", option_id)]] %||% "")
+      }, logical(1)))
+      percent <- if (total == 0) 0 else round(answered / total * 100)
+
+      shiny::div(
+        class = "completion-meter",
+        shiny::div(
+          class = "completion-meter-label",
+          shiny::span(paste(answered, "of", total, "times answered")),
+          shiny::span(paste0(percent, "%"))
+        ),
+        shiny::div(
+          class = "completion-track",
+          shiny::div(class = "completion-fill", style = paste0("width:", percent, "%;"))
+        )
+      )
+    })
+
     output$respond_page <- shiny::renderUI({
       bundle <- poll_bundle()
       if (!is.null(bundle$error)) {
@@ -37,10 +63,17 @@ respond_poll_server <- function(id, conn, token) {
       poll <- bundle$poll
       options <- bundle$options
       if (submitted()) {
-        return(shiny::div(
-          class = "section-card",
-          shiny::h1("Response submitted"),
-          shiny::p("Thank you. Your availability has been saved. You may close this page.")
+        return(shiny::tagList(
+          page_header_ui(
+            eyebrow = "Availability saved",
+            title = "Response submitted",
+            subtitle = "Your latest availability has been saved for the organizer."
+          ),
+          section_panel_ui(
+            "What happens next",
+            NULL,
+            shiny::p("The organizer will review all responses through their private dashboard and follow up with the final meeting time.")
+          )
         ))
       }
       if (!identical(poll$status[[1]], "open")) {
@@ -51,45 +84,40 @@ respond_poll_server <- function(id, conn, token) {
       }
 
       availability_inputs <- lapply(seq_len(nrow(options)), function(i) {
-        option <- options[i, , drop = FALSE]
-        shiny::div(
-          class = "section-card",
-          shiny::h3(option$display_label[[1]]),
-          shiny::radioButtons(
-            session$ns(paste0("availability_", option$option_id[[1]])),
-            "Your availability",
-            choices = availability_choices(),
-            selected = character(0)
-          )
-        )
+        build_response_option_ui(session$ns, options[i, , drop = FALSE], i, nrow(options))
       })
 
       shiny::tagList(
-        shiny::div(
-          class = "app-header",
-          shiny::h1(poll$title[[1]]),
-          shiny::p(poll$description[[1]])
+        page_header_ui(
+          eyebrow = "Meeting availability poll",
+          title = poll$title[[1]],
+          subtitle = poll$description[[1]],
+          meta = detail_grid_ui(poll_detail_items(poll))
         ),
-        shiny::div(
-          class = "privacy-notice",
-          shiny::strong("Privacy notice"),
-          shiny::p("This form collects your name, email, organization, availability, and optional comments so the organizer can choose a meeting time. Results are visible only through the private organizer link.")
-        ),
-        shiny::div(
-          class = "section-card",
-          shiny::h2("Your details"),
+        privacy_notice_ui(compact = TRUE),
+        section_panel_ui(
+          "Your details",
+          "Use the email address the organizer knows. If you respond again with the same email, your latest response replaces the earlier one.",
           shiny::fluidRow(
             shiny::column(4, shiny::textInput(session$ns("name"), "Name")),
             shiny::column(4, shiny::textInput(session$ns("email"), "Email")),
             shiny::column(4, shiny::textInput(session$ns("organization"), "Organization"))
-          ),
-          shiny::p(class = "helper-text", "Available and preferred means you can attend and this time works especially well for you.")
+          )
         ),
-        availability_inputs,
+        section_panel_ui(
+          "Choose your availability",
+          "Available and preferred means you can attend and this time works especially well for you.",
+          availability_legend_ui(),
+          shiny::div(class = "response-options", availability_inputs)
+        ),
         shiny::div(
-          class = "section-card",
-          shiny::textAreaInput(session$ns("comments"), "Optional comments", rows = 3),
-          shiny::actionButton(session$ns("submit_response"), "Submit availability", class = "btn-primary")
+          class = "response-submit-bar",
+          shiny::uiOutput(session$ns("completion_status")),
+          shiny::div(
+            class = "response-submit-actions",
+            shiny::textAreaInput(session$ns("comments"), "Optional comments", rows = 2, placeholder = "Anything the organizer should know?"),
+            shiny::actionButton(session$ns("submit_response"), "Submit availability", class = "btn-primary btn-lg")
+          )
         )
       )
     })
@@ -129,10 +157,23 @@ respond_poll_server <- function(id, conn, token) {
   })
 }
 
-empty_state_ui <- function(title, message) {
+build_response_option_ui <- function(ns, option, index, total) {
   shiny::div(
-    class = "empty-state",
-    shiny::h2(title),
-    shiny::p(message)
+    class = "response-option-card",
+    shiny::div(
+      class = "response-option-meta",
+      shiny::span(class = "option-kicker", paste("Option", index, "of", total)),
+      shiny::h3(option$display_label[[1]])
+    ),
+    shiny::div(
+      class = "availability-vote",
+      shiny::radioButtons(
+        ns(paste0("availability_", option$option_id[[1]])),
+        "Choose one",
+        choices = availability_choices(),
+        selected = character(0),
+        inline = TRUE
+      )
+    )
   )
 }
