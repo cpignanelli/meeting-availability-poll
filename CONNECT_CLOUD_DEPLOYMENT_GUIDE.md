@@ -31,6 +31,8 @@ https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/?cre
 
 Share only the generated participant `?respond=<token>` links with colleagues. Keep both the creation URL and generated admin links private.
 
+You can create multiple live booking polls at the same time. Each poll has its own public response link, private organizer link, and optional response deadline / link expiry date. There is no organizer login dashboard in this proof of concept, so save the private organizer link for every poll you create.
+
 ## What You Are Publishing
 
 You are publishing the app code only. You are not publishing the local test database.
@@ -300,6 +302,8 @@ Create a test poll. The app will show two links:
 - **Public response link**: send this to your colleague.
 - **Private organizer link**: keep this for yourself.
 
+If you set a response deadline / link expiry, participants can respond through that date. Starting the next day, the participant link will show a closed message with your organizer name and email. From the private organizer dashboard, you can close a non-finalized response link, reopen an expired or closed link with a new expiry date, or reopen it without an expiry date.
+
 ## Part 11: Free Plan Limits
 
 For the free Connect Cloud plan:
@@ -310,6 +314,7 @@ For the free Connect Cloud plan:
 - Use fake or low-risk test data only.
 - SQLite is only for a demo. It is not durable production storage on Connect Cloud.
 - Republish/restart events can remove the SQLite data.
+- Save each private organizer link. Without an organizer login dashboard, that link is how you manage results and reopen/close the response link.
 
 For real production use, move to a paid plan and a hosted database such as PostgreSQL, Supabase, Neon, or Azure SQL.
 

@@ -14,13 +14,15 @@ Keep the real `POLL_CREATION_SECRET` value only in Posit Connect Cloud environme
 
 ## User workflow
 
-1. The organizer creates a poll with meeting details, duration, time zone, proposed times, optional location details, optional deadline, and optional expected participants.
+1. The organizer creates a poll with meeting details, duration, time zone, proposed times, optional location details, optional response deadline / link expiry, and optional expected participants.
 2. The app generates two links:
    - Public response link: `?respond=<token>`
    - Private organizer link: `?admin=<token>`
 3. Participants submit name, email, organization, availability for each option, and optional comments through a Doodle-like voting grid.
 4. The organizer reviews a decision-focused dashboard with the recommended time, response progress, ranked slots, a heatmap, responses, missing expected participants, and CSV exports.
 5. The organizer selects the final time, generates copy-ready final email text, optionally downloads an `.ics` file, and closes the poll.
+
+Organizers can create multiple live booking polls at the same time. Each poll has its own public response link and private organizer link. There is no organizer login dashboard in this proof of concept, so save each private organizer link.
 
 ## User experience
 
@@ -30,9 +32,22 @@ The app uses a minimal white interface with near-black text and restrained cardi
 - privacy notice before data entry;
 - one compact availability choice row per proposed time;
 - explicit labels for "Available and preferred", "Available", and "Unavailable";
+- clear messaging that final meeting confirmation will follow from the organizer;
 - no public access to results, expected participant lists, or organizer-only details.
 
-The organizer dashboard is optimized for deciding quickly: the top section shows the best-ranked option, response progress, shareable participant link, ranked options, heatmap, exports, and finalization controls.
+The organizer dashboard is optimized for deciding quickly: the overview shows the best-ranked option, response progress, response-link status, shareable participant link, ranked options, heatmap, exports, and finalization controls.
+
+## Response link expiry and reopening
+
+Each poll can have an optional response deadline / link expiry date. Participants can respond through that date in the poll's time zone. Starting the next day, the response link shows a closed message with the organizer's name and email so the participant knows whom to contact.
+
+From the private organizer dashboard, non-finalized polls can be:
+
+- closed manually;
+- reopened with a new expiry date;
+- reopened without an expiry date.
+
+Finalized polls cannot be reopened in this version. Create a new poll if a finalized meeting needs to be rescheduled.
 
 ## Required R packages
 
@@ -147,7 +162,7 @@ Live proof-of-concept caveats:
 
 - The data is stored on your computer in `data/app.sqlite`.
 - If your R session stops, the app is offline.
-- Anyone with the public response link can submit a response.
+- Anyone with the public response link can submit a response while the link is open.
 - Anyone with the private organizer link can view results.
 - Use fake or low-risk test data unless you deploy with production controls.
 
@@ -177,6 +192,7 @@ Implemented in this proof of concept:
 - Admin tokens are stored as SHA-256 hashes, not raw tokens.
 - Public response links do not expose results.
 - Private organizer links are required for dashboard access.
+- Closed or expired response links show organizer contact details so participants can ask whether the link can be reopened.
 - User input is validated, trimmed, length-limited, and escaped when rendered.
 - Database writes use parameterized DBI queries.
 - Audit logs avoid personal information.

@@ -299,3 +299,33 @@ close_poll <- function(conn, poll_id) {
   })
   invisible(TRUE)
 }
+
+reopen_poll <- function(conn, poll_id, response_deadline = "") {
+  response_deadline <- sanitize_text(response_deadline, max_chars = 40)
+  reopened_at <- db_now()
+
+  with_db_transaction(conn, function(tx) {
+    current <- DBI::dbGetQuery(
+      tx,
+      "SELECT status FROM polls WHERE poll_id = ? LIMIT 1",
+      params = list(poll_id)
+    )
+    if (nrow(current) == 0) {
+      stop("Poll not found.", call. = FALSE)
+    }
+    if (identical(current$status[[1]], "finalized")) {
+      stop("Finalized polls cannot be reopened.", call. = FALSE)
+    }
+
+    DBI::dbExecute(
+      tx,
+      "UPDATE polls
+       SET status = 'open', response_deadline = ?, updated_at = ?, closed_at = NULL
+       WHERE poll_id = ? AND status != 'finalized'",
+      params = list(response_deadline, reopened_at, poll_id)
+    )
+    audit_event(tx, poll_id, "poll_reopened", "Poll response link reopened")
+  })
+
+  invisible(TRUE)
+}

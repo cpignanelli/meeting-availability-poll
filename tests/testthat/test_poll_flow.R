@@ -58,3 +58,35 @@ testthat::test_that("ranking and finalization work", {
   testthat::expect_equal(finalized$selected_option_id[[1]], data$ranked$option_id[[1]])
   testthat::expect_equal(refreshed$poll$status[[1]], "finalized")
 })
+
+testthat::test_that("closed and expired polls can be reopened unless finalized", {
+  conn <- make_test_connection()
+  on.exit(close_db_connection(conn), add = TRUE)
+  result <- make_sample_poll(conn)
+  poll <- get_poll_by_response_token(conn, result$response_token)
+  today <- as.Date(format(Sys.time(), tz = "America/Toronto", usetz = FALSE))
+
+  close_poll(conn, poll$poll_id[[1]])
+  reopened_deadline <- as.character(today + 7L)
+  reopen_poll(conn, poll$poll_id[[1]], reopened_deadline)
+  reopened <- get_poll_dashboard_data(conn, poll$poll_id[[1]])
+  testthat::expect_equal(reopened$poll$status[[1]], "open")
+  testthat::expect_equal(reopened$poll$response_deadline[[1]], reopened_deadline)
+
+  DBI::dbExecute(
+    conn,
+    "UPDATE polls SET response_deadline = ? WHERE poll_id = ?",
+    params = list(as.character(today - 1L), poll$poll_id[[1]])
+  )
+  expired <- get_poll_dashboard_data(conn, poll$poll_id[[1]])
+  testthat::expect_equal(poll_display_status(expired$poll), "expired")
+
+  reopen_poll(conn, poll$poll_id[[1]], "")
+  no_deadline <- get_poll_dashboard_data(conn, poll$poll_id[[1]])
+  testthat::expect_equal(no_deadline$poll$status[[1]], "open")
+  testthat::expect_equal(no_deadline$poll$response_deadline[[1]], "")
+  testthat::expect_equal(poll_display_status(no_deadline$poll), "open")
+
+  finalize_meeting(conn, poll$poll_id[[1]], no_deadline$options$option_id[[1]], "")
+  testthat::expect_error(reopen_poll(conn, poll$poll_id[[1]], ""), "Finalized")
+})

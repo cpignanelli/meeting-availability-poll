@@ -52,10 +52,7 @@ server <- function(input, output, session) {
     } else if (can_create_poll(params)) {
       create_poll_ui("create")
     } else {
-      empty_state_ui(
-        "Poll creation is private",
-        "This public deployment requires a private creation link. Participant response links and organizer links still work normally."
-      )
+      private_creation_page_ui()
     }
   })
 

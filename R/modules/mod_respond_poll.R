@@ -2,6 +2,7 @@ respond_poll_ui <- function(id) {
   ns <- shiny::NS(id)
   shiny::div(
     class = "app-shell respondent-shell",
+    app_topbar_ui("Respond"),
     shiny::uiOutput(ns("respond_page"))
   )
 }
@@ -67,7 +68,7 @@ respond_poll_server <- function(id, conn, token) {
           page_header_ui(
             eyebrow = "Availability saved",
             title = "Response submitted",
-            subtitle = "Your latest availability has been saved for the organizer."
+            subtitle = "Your availability has been saved. Final meeting confirmation will follow from the organizer."
           ),
           section_panel_ui(
             "What happens next",
@@ -76,16 +77,16 @@ respond_poll_server <- function(id, conn, token) {
           )
         ))
       }
-      if (!identical(poll$status[[1]], "open")) {
-        return(empty_state_ui("This poll is closed", "The organizer is no longer accepting responses for this poll."))
+      display_status <- poll_display_status(poll)
+      if (identical(display_status, "finalized")) {
+        return(empty_state_ui("This poll has been finalized", finalized_poll_contact_message(poll)))
       }
-      if (deadline_has_passed(poll$response_deadline[[1]], poll$timezone[[1]])) {
-        return(empty_state_ui("The response deadline has passed", "The organizer's response deadline has passed."))
+      if (identical(display_status, "expired")) {
+        return(closed_poll_contact_ui(poll, "This booking link has expired"))
       }
-
-      availability_inputs <- lapply(seq_len(nrow(options)), function(i) {
-        build_response_option_ui(session$ns, options[i, , drop = FALSE], i, nrow(options))
-      })
+      if (!identical(display_status, "open")) {
+        return(closed_poll_contact_ui(poll, "This booking link is closed"))
+      }
 
       shiny::tagList(
         page_header_ui(
@@ -106,9 +107,9 @@ respond_poll_server <- function(id, conn, token) {
         ),
         section_panel_ui(
           "Choose your availability",
-          "Available and preferred means you can attend and this time works especially well for you.",
+          "Available and preferred means you can attend and this time works especially well for you. Final meeting confirmation will follow from the organizer.",
           availability_legend_ui(),
-          shiny::div(class = "response-options", availability_inputs)
+          build_response_matrix_ui(session$ns, options)
         ),
         shiny::div(
           class = "response-submit-bar",
@@ -116,7 +117,7 @@ respond_poll_server <- function(id, conn, token) {
           shiny::div(
             class = "response-submit-actions",
             shiny::textAreaInput(session$ns("comments"), "Optional comments", rows = 2, placeholder = "Anything the organizer should know?"),
-            shiny::actionButton(session$ns("submit_response"), "Submit availability", class = "btn-primary btn-lg")
+            shiny::actionButton(session$ns("submit_response"), "Submit my availability", class = "btn-primary btn-lg")
           )
         )
       )
@@ -131,7 +132,7 @@ respond_poll_server <- function(id, conn, token) {
       poll <- bundle$poll
       options <- bundle$options
       tryCatch({
-        if (!identical(poll$status[[1]], "open") || deadline_has_passed(poll$response_deadline[[1]], poll$timezone[[1]])) {
+        if (!poll_accepts_responses(poll)) {
           stop("This poll is no longer accepting responses.", call. = FALSE)
         }
         participant <- list(
@@ -159,9 +160,9 @@ respond_poll_server <- function(id, conn, token) {
 
 build_response_option_ui <- function(ns, option, index, total) {
   shiny::div(
-    class = "response-option-card",
+    class = "response-matrix-row",
     shiny::div(
-      class = "response-option-meta",
+      class = "response-time-cell",
       shiny::span(class = "option-kicker", paste("Option", index, "of", total)),
       shiny::h3(option$display_label[[1]])
     ),
@@ -175,5 +176,23 @@ build_response_option_ui <- function(ns, option, index, total) {
         inline = TRUE
       )
     )
+  )
+}
+
+build_response_matrix_ui <- function(ns, options) {
+  rows <- lapply(seq_len(nrow(options)), function(i) {
+    build_response_option_ui(ns, options[i, , drop = FALSE], i, nrow(options))
+  })
+
+  shiny::div(
+    class = "response-matrix",
+    shiny::div(
+      class = "response-matrix-header",
+      shiny::span("Proposed time"),
+      shiny::span("Preferred"),
+      shiny::span("Available"),
+      shiny::span("Unavailable")
+    ),
+    rows
   )
 }

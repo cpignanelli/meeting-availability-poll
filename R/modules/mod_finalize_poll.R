@@ -1,7 +1,7 @@
 finalize_poll_ui <- function(id) {
   ns <- shiny::NS(id)
   section_panel_ui(
-    "Finalize meeting",
+    "Finalize and close poll",
     "Choose the final time, prepare the email text, and close the poll when the decision is made.",
     shiny::uiOutput(ns("final_status")),
     shiny::div(
@@ -10,12 +10,7 @@ finalize_poll_ui <- function(id) {
         class = "finalize-controls",
         shiny::uiOutput(ns("final_option_ui")),
         shiny::textAreaInput(ns("final_notes"), "Optional final notes", rows = 3, placeholder = "Add agenda, joining instructions, or follow-up context."),
-        shiny::div(
-          class = "button-row",
-          shiny::downloadButton(ns("download_ics"), "Download .ics file", class = "btn-outline-secondary"),
-          shiny::actionButton(ns("finalize"), "Finalize and close poll", class = "btn-primary"),
-          shiny::actionButton(ns("close_poll"), "Close without finalizing", class = "btn-outline-secondary")
-        )
+        shiny::uiOutput(ns("final_actions"))
       ),
       shiny::div(
         class = "finalize-preview",
@@ -56,6 +51,25 @@ finalize_poll_server <- function(id, conn, dashboard_data, refresh) {
       choices <- stats::setNames(data$options$option_id, data$options$display_label)
       selected <- if (!is.null(data$finalized)) data$finalized$selected_option_id[[1]] else data$options$option_id[[1]]
       shiny::selectInput(session$ns("selected_option_id"), "Selected meeting time", choices = choices, selected = selected)
+    })
+
+    output$final_actions <- shiny::renderUI({
+      data <- dashboard_data()
+      if (is.null(data)) {
+        return(NULL)
+      }
+      if (identical(poll_display_status(data$poll), "finalized")) {
+        return(shiny::div(
+          class = "button-row",
+          shiny::downloadButton(session$ns("download_ics"), "Download .ics file", class = "btn-outline-secondary")
+        ))
+      }
+      shiny::div(
+        class = "button-row",
+        shiny::downloadButton(session$ns("download_ics"), "Download .ics file", class = "btn-outline-secondary"),
+        shiny::actionButton(session$ns("finalize"), "Finalize selected time", class = "btn-primary"),
+        shiny::actionButton(session$ns("close_poll"), "Close without finalizing", class = "btn-outline-secondary")
+      )
     })
 
     output$email_preview_ui <- shiny::renderUI({

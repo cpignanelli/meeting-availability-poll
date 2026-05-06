@@ -2,10 +2,11 @@ create_poll_ui <- function(id) {
   ns <- shiny::NS(id)
   shiny::div(
     class = "app-shell organizer-shell",
+    app_topbar_ui("Create"),
     page_header_ui(
       eyebrow = "Organizer setup",
       title = "Create a meeting availability poll",
-      subtitle = "Propose a few times manually, share one response link, and keep the private organizer link for results."
+      subtitle = "Create one unique booking invite for this meeting. You can create additional polls for other meetings or groups."
     ),
     shiny::uiOutput(ns("created_links")),
     shiny::div(
@@ -24,21 +25,24 @@ create_poll_ui <- function(id) {
             shiny::column(6, shiny::textInput(ns("organizer_name"), "Organizer name")),
             shiny::column(6, shiny::textInput(ns("organizer_email"), "Organizer email"))
           ),
-          shiny::fluidRow(
-            shiny::column(
-              6,
-              shiny::selectInput(
-                ns("timezone"),
-                "Time zone",
-                choices = OlsonNames(),
-                selected = if ("America/Toronto" %in% OlsonNames()) "America/Toronto" else Sys.timezone()
-              )
-            ),
-            shiny::column(6, shiny::dateInput(ns("response_deadline"), "Optional response deadline", value = NULL))
+          shiny::selectInput(
+            ns("timezone"),
+            "Time zone",
+            choices = OlsonNames(),
+            selected = if ("America/Toronto" %in% OlsonNames()) "America/Toronto" else Sys.timezone()
           ),
           shiny::fluidRow(
             shiny::column(4, shiny::selectInput(ns("location_type"), "Location type", choices = c("To be determined", "Virtual", "In person", "Hybrid"))),
             shiny::column(8, shiny::textInput(ns("location_details"), "Optional location or virtual meeting details"))
+          ),
+          shiny::div(
+            class = "response-settings-card",
+            shiny::div(
+              class = "response-settings-copy",
+              shiny::strong("Response link settings"),
+              shiny::p("The response link will close after this date unless you reopen it from the organizer dashboard.")
+            ),
+            shiny::dateInput(ns("response_deadline"), "Response deadline / link expiry", value = NULL)
           )
         ),
         section_panel_ui(
@@ -53,7 +57,7 @@ create_poll_ui <- function(id) {
           shiny::uiOutput(ns("time_preview"))
         ),
         section_panel_ui(
-          "3. People and instructions",
+          "3. Participants and instructions",
           "Expected participants are optional and visible only in the private organizer dashboard.",
           shiny::textAreaInput(
             ns("expected_participants"),
@@ -68,10 +72,10 @@ create_poll_ui <- function(id) {
       shiny::tags$aside(
         class = "create-sidebar",
         section_panel_ui(
-          "4. Review",
+          "Review and create",
           "Create the poll when the essentials are ready. The private organizer link is shown once after creation.",
           shiny::uiOutput(ns("create_readiness")),
-          shiny::actionButton(ns("create_poll"), "Create poll", class = "btn-primary btn-lg create-submit")
+          shiny::actionButton(ns("create_poll"), "Create poll and generate links", class = "btn-primary btn-lg create-submit")
         ),
         privacy_notice_ui(compact = TRUE)
       )
@@ -191,7 +195,7 @@ create_poll_server <- function(id, conn) {
       if (length(missing) > 0) {
         return(shiny::div(
           class = "readiness-list",
-          shiny::p(class = "helper-text", "Still needed:"),
+          shiny::p(class = "helper-text", "Before creating the poll:"),
           shiny::tags$ul(lapply(missing, shiny::tags$li))
         ))
       }
@@ -210,12 +214,12 @@ create_poll_server <- function(id, conn) {
       }
       section_panel_ui(
         "Poll created",
-        "Share the public response link with participants. Keep the private organizer link restricted to the organizer.",
+        "This is one unique booking invite. Share the public response link with participants, and keep the private organizer link restricted to the organizer.",
         shiny::div(
           class = "link-box",
           copy_field_ui(session$ns("response_link_copy"), "Public response link", info$response_link, "Participants can only submit availability from this link."),
           copy_field_ui(session$ns("admin_link_copy"), "Private organizer link", info$admin_link, sensitive = TRUE),
-          shiny::p(class = "helper-text", "The private link is shown here as a raw token only once. The app stores only its hash.")
+          shiny::p(class = "helper-text", "The private link is shown here as a raw token only once. The app stores only its hash. Create a new poll if you need another live booking invite.")
         )
       )
     })
@@ -235,6 +239,12 @@ create_poll_server <- function(id, conn) {
         location_details <- sanitize_text(input$location_details, max_chars = 1000)
         response_deadline <- input$response_deadline
         response_deadline <- if (is.null(response_deadline) || is.na(response_deadline)) "" else as.character(response_deadline)
+        if (nzchar(response_deadline)) {
+          today_local <- as.Date(format(Sys.time(), tz = timezone, usetz = FALSE))
+          if (as.Date(response_deadline) < today_local) {
+            stop("Choose today or a future date for the response deadline / link expiry.", call. = FALSE)
+          }
+        }
 
         options <- collect_time_options(timezone, duration)
         if (nrow(options) == 0) {

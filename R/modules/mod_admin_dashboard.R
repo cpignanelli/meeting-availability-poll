@@ -2,6 +2,7 @@ admin_dashboard_ui <- function(id) {
   ns <- shiny::NS(id)
   shiny::div(
     class = "app-shell admin-shell",
+    app_topbar_ui("Organizer Dashboard"),
     shiny::uiOutput(ns("admin_page"))
   )
 }
@@ -40,45 +41,63 @@ admin_dashboard_server <- function(id, conn, token) {
           title = data$poll$title[[1]],
           subtitle = data$poll$description[[1]],
           meta = shiny::tagList(
-            status_pill_ui(data$poll$status[[1]]),
+            status_pill_ui(poll_display_status(data$poll)),
             detail_grid_ui(poll_detail_items(data$poll))
           )
         ),
         shiny::div(
-          class = "dashboard-lead-grid",
-          shiny::uiOutput(session$ns("decision_card")),
-          shiny::uiOutput(session$ns("share_link_panel"))
-        ),
-        shiny::uiOutput(session$ns("summary_cards")),
-        section_panel_ui(
-          "Ranked time slots",
-          "Scores use: preferred = 2, available = 1, unavailable or missing = 0.",
-          shiny::uiOutput(session$ns("ranked_cards")),
-          shiny::details(
-            class = "details-panel",
-            shiny::tags$summary("Show detailed ranked table"),
-            DT::DTOutput(session$ns("ranked_table"))
-          ),
-          shiny::downloadButton(session$ns("download_ranked"), "Export ranked slots CSV", class = "btn-outline-secondary")
-        ),
-        section_panel_ui(
-          "Availability heatmap",
-          "Each cell includes text and color so availability is readable without relying on color alone.",
-          availability_legend_ui(),
-          shiny::uiOutput(session$ns("heatmap"))
-        ),
-        section_panel_ui(
-          "Participant responses",
-          "Detailed response data is visible only from this private organizer link.",
-          DT::DTOutput(session$ns("responses_table")),
-          shiny::downloadButton(session$ns("download_responses"), "Export responses CSV", class = "btn-outline-secondary")
-        ),
-        section_panel_ui(
-          "Missing expected responses",
-          NULL,
-          shiny::uiOutput(session$ns("missing_expected"))
-        ),
-        finalize_poll_ui(session$ns("finalize"))
+          class = "dashboard-tabs",
+          shiny::tabsetPanel(
+            type = "tabs",
+            shiny::tabPanel(
+              "Overview",
+              shiny::div(
+                class = "dashboard-lead-grid",
+                shiny::uiOutput(session$ns("decision_card")),
+                shiny::uiOutput(session$ns("response_link_panel"))
+              ),
+              shiny::uiOutput(session$ns("summary_cards")),
+              section_panel_ui(
+                "Ranked options",
+                "Scores use: preferred = 2, available = 1, unavailable or missing = 0.",
+                shiny::uiOutput(session$ns("ranked_cards")),
+                shiny::details(
+                  class = "details-panel",
+                  shiny::tags$summary("Show detailed ranked table"),
+                  DT::DTOutput(session$ns("ranked_table"))
+                ),
+                shiny::downloadButton(session$ns("download_ranked"), "Download ranked options", class = "btn-outline-secondary")
+              )
+            ),
+            shiny::tabPanel(
+              "Availability",
+              section_panel_ui(
+                "Availability heatmap",
+                "Each cell includes text and color so availability is readable without relying on color alone.",
+                availability_legend_ui(),
+                shiny::uiOutput(session$ns("heatmap"))
+              ),
+              section_panel_ui(
+                "Missing responses",
+                NULL,
+                shiny::uiOutput(session$ns("missing_expected"))
+              )
+            ),
+            shiny::tabPanel(
+              "Responses",
+              section_panel_ui(
+                "Response details",
+                "Detailed response data is visible only from this private organizer link.",
+                DT::DTOutput(session$ns("responses_table")),
+                shiny::downloadButton(session$ns("download_responses"), "Download response details", class = "btn-outline-secondary")
+              )
+            ),
+            shiny::tabPanel(
+              "Finalize",
+              finalize_poll_ui(session$ns("finalize"))
+            )
+          )
+        )
       )
     })
 
@@ -87,7 +106,7 @@ admin_dashboard_server <- function(id, conn, token) {
       if (is.null(data)) return(NULL)
       if (nrow(data$ranked) == 0 || nrow(data$participants) == 0) {
         return(section_panel_ui(
-          "Recommended time",
+          "Best current option",
           NULL,
           empty_state_ui("No responses yet", "The recommended time will appear after participants submit availability.")
         ))
@@ -95,7 +114,7 @@ admin_dashboard_server <- function(id, conn, token) {
 
       best <- data$ranked[1, , drop = FALSE]
       section_panel_ui(
-        "Recommended time",
+        "Best current option",
         "Based on the current scoring rules and required-attendee conflicts.",
         shiny::div(
           class = "decision-card",
@@ -112,14 +131,21 @@ admin_dashboard_server <- function(id, conn, token) {
       )
     })
 
-    output$share_link_panel <- shiny::renderUI({
+    output$response_link_panel <- shiny::renderUI({
       data <- dashboard_data()
       if (is.null(data)) return(NULL)
       response_link <- build_app_link(session, "respond", data$poll$response_token[[1]])
+      display_status <- poll_display_status(data$poll)
       section_panel_ui(
-        "Share response link",
+        "Response link",
         "Send this public link to participants. It allows response submission only.",
-        copy_field_ui(session$ns("response_link_admin_copy"), "Public response link", response_link)
+        status_banner_ui(
+          display_status,
+          paste("Link status:", poll_display_status_label(display_status)),
+          response_link_status_message(data$poll, display_status)
+        ),
+        copy_field_ui(session$ns("response_link_admin_copy"), "Public response link", response_link),
+        response_link_controls_ui(session$ns, display_status)
       )
     })
 
@@ -136,8 +162,8 @@ admin_dashboard_server <- function(id, conn, token) {
         class = "summary-grid",
         metric_card_ui("Responses", response_progress, if (expected_count > 0) "Expected participant progress" else "Submitted responses"),
         metric_card_ui("Proposed slots", nrow(data$options)),
-        metric_card_ui("Deadline", format_deadline_label(data$poll$response_deadline[[1]])),
-        metric_card_ui("Poll status", data$poll$status[[1]])
+        metric_card_ui("Link expiry", format_deadline_label(data$poll$response_deadline[[1]])),
+        metric_card_ui("Poll status", poll_display_status_label(poll_display_status(data$poll)))
       )
     })
 
@@ -215,8 +241,90 @@ admin_dashboard_server <- function(id, conn, token) {
       }
     )
 
+    shiny::observeEvent(input$close_response_link, {
+      data <- dashboard_data()
+      tryCatch({
+        if (is.null(data)) {
+          stop("Poll not found.", call. = FALSE)
+        }
+        close_poll(conn, data$poll$poll_id[[1]])
+        refresh()
+        shiny::showNotification("Response link closed.", type = "message")
+      }, error = function(e) {
+        shiny::showNotification(safe_error_message(e), type = "error", duration = 8)
+      })
+    })
+
+    shiny::observeEvent(input$reopen_response_link, {
+      data <- dashboard_data()
+      tryCatch({
+        if (is.null(data)) {
+          stop("Poll not found.", call. = FALSE)
+        }
+        if (identical(poll_display_status(data$poll), "finalized")) {
+          stop("Finalized polls cannot be reopened.", call. = FALSE)
+        }
+
+        no_deadline <- isTRUE(input$reopen_without_deadline)
+        new_deadline <- if (no_deadline) "" else input$reopen_deadline
+        if (!no_deadline) {
+          if (is.null(new_deadline) || is.na(new_deadline)) {
+            stop("Choose a new expiry date or reopen without an expiry date.", call. = FALSE)
+          }
+          today_local <- as.Date(format(Sys.time(), tz = data$poll$timezone[[1]], usetz = FALSE))
+          if (as.Date(new_deadline) < today_local) {
+            stop("Choose today or a future date for the reopened response link.", call. = FALSE)
+          }
+          new_deadline <- as.character(as.Date(new_deadline))
+        }
+
+        reopen_poll(conn, data$poll$poll_id[[1]], new_deadline)
+        refresh()
+        shiny::showNotification("Response link reopened.", type = "message")
+      }, error = function(e) {
+        shiny::showNotification(safe_error_message(e), type = "error", duration = 8)
+      })
+    })
+
     finalize_poll_server("finalize", conn, dashboard_data, refresh)
   })
+}
+
+response_link_status_message <- function(poll, display_status) {
+  deadline <- format_deadline_label(poll$response_deadline[[1]])
+  if (identical(display_status, "open")) {
+    return(paste("Participants can respond. Current expiry:", deadline))
+  }
+  if (identical(display_status, "expired")) {
+    return(paste("The response link expired after", deadline, "and is no longer accepting responses."))
+  }
+  if (identical(display_status, "closed")) {
+    return("The organizer closed this response link. You can reopen it below if needed.")
+  }
+  if (identical(display_status, "finalized")) {
+    return("The poll has been finalized. Reopening is disabled for finalized polls.")
+  }
+  "Response link status is unavailable."
+}
+
+response_link_controls_ui <- function(ns, display_status) {
+  if (identical(display_status, "finalized")) {
+    return(shiny::p(class = "helper-text", "Finalized polls cannot be reopened in this version."))
+  }
+
+  if (identical(display_status, "open")) {
+    return(shiny::div(
+      class = "response-link-controls",
+      shiny::actionButton(ns("close_response_link"), "Close response link", class = "btn-outline-secondary")
+    ))
+  }
+
+  shiny::div(
+    class = "response-link-controls reopen-controls",
+    shiny::dateInput(ns("reopen_deadline"), "New response deadline / link expiry", value = Sys.Date() + 7L),
+    shiny::checkboxInput(ns("reopen_without_deadline"), "Reopen without an expiry date", value = FALSE),
+    shiny::actionButton(ns("reopen_response_link"), "Reopen response link", class = "btn-primary")
+  )
 }
 
 format_ranked_table <- function(ranked) {

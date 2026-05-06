@@ -5,6 +5,40 @@ ui_text <- function(value, fallback = "") {
   if (nzchar(trimws(value))) value else fallback
 }
 
+app_topbar_ui <- function(context, status = NULL) {
+  shiny::div(
+    class = "app-topbar",
+    shiny::div(
+      class = "app-brand",
+      shiny::span(class = "brand-mark"),
+      shiny::span(class = "brand-name", "Meeting Availability Poll")
+    ),
+    shiny::div(
+      class = "app-context",
+      shiny::span(context),
+      if (!is.null(status)) status
+    )
+  )
+}
+
+private_creation_page_ui <- function() {
+  shiny::div(
+    class = "app-shell access-shell",
+    app_topbar_ui("Private creation access"),
+    page_header_ui(
+      eyebrow = "Private organizer access",
+      title = "Poll creation is private",
+      subtitle = "Use your private creation URL to start a new booking poll. Participant response links and organizer dashboard links continue to work normally."
+    ),
+    section_panel_ui(
+      "Need to create a poll?",
+      "Open the private creation link that includes your creation secret. This protects a public pilot app from random visitors creating booking links.",
+      shiny::p(class = "helper-text", "The link format is:"),
+      shiny::pre(class = "route-example", "?create=<your-private-creation-secret>")
+    )
+  )
+}
+
 page_header_ui <- function(eyebrow, title, subtitle = NULL, meta = NULL, actions = NULL) {
   shiny::div(
     class = "page-hero",
@@ -74,10 +108,73 @@ detail_grid_ui <- function(items) {
 
 status_pill_ui <- function(status, label = NULL) {
   status <- tolower(ui_text(status, "unknown"))
-  label <- label %||% paste("Status:", status)
+  label <- label %||% paste("Status:", poll_display_status_label(status))
   shiny::span(
     class = paste("status-pill", paste0("status-", status)),
     label
+  )
+}
+
+poll_display_status <- function(poll) {
+  status <- tolower(ui_text(poll$status[[1]], "unknown"))
+  if (identical(status, "open") && deadline_has_passed(poll$response_deadline[[1]], poll$timezone[[1]])) {
+    return("expired")
+  }
+  status
+}
+
+poll_display_status_label <- function(status) {
+  labels <- c(
+    open = "Open",
+    expired = "Expired",
+    closed = "Closed",
+    finalized = "Finalized",
+    unknown = "Unknown"
+  )
+  value <- unname(labels[tolower(ui_text(status, "unknown"))])
+  if (is.na(value)) "Unknown" else value
+}
+
+poll_accepts_responses <- function(poll) {
+  identical(poll_display_status(poll), "open")
+}
+
+closed_poll_contact_message <- function(poll) {
+  paste0(
+    "This booking link is closed. Contact ",
+    ui_text(poll$organizer_name[[1]], "the organizer"),
+    " at ",
+    ui_text(poll$organizer_email[[1]], "the organizer's email"),
+    " to ask whether the link can be reopened. Confirmation of the final meeting time will follow from the organizer."
+  )
+}
+
+finalized_poll_contact_message <- function(poll) {
+  paste0(
+    "The organizer has finalized this poll. Contact ",
+    ui_text(poll$organizer_name[[1]], "the organizer"),
+    " at ",
+    ui_text(poll$organizer_email[[1]], "the organizer's email"),
+    " if you have questions. Confirmation of the final meeting time will follow from the organizer."
+  )
+}
+
+closed_poll_contact_ui <- function(poll, title = "This booking link is closed") {
+  empty_state_ui(
+    title,
+    closed_poll_contact_message(poll)
+  )
+}
+
+status_banner_ui <- function(status, title, message, action = NULL) {
+  status <- tolower(ui_text(status, "unknown"))
+  shiny::div(
+    class = paste("status-banner", paste0("status-banner-", status)),
+    shiny::div(
+      shiny::strong(title),
+      shiny::p(message)
+    ),
+    action
   )
 }
 
@@ -180,7 +277,7 @@ poll_detail_items <- function(poll) {
     list(label = "Organizer", value = poll$organizer_name[[1]]),
     list(label = "Duration", value = paste(poll$duration_minutes[[1]], "minutes")),
     list(label = "Time zone", value = poll$timezone[[1]]),
-    list(label = "Deadline", value = format_deadline_label(poll$response_deadline[[1]])),
+    list(label = "Link expiry", value = format_deadline_label(poll$response_deadline[[1]])),
     list(label = "Location", value = location_value)
   )
 }
