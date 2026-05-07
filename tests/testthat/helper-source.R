@@ -6,9 +6,11 @@ project_root <- if (dir.exists(file.path(getwd(), "R"))) {
 
 source(file.path(project_root, "R/utils/time_helpers.R"), local = TRUE)
 source(file.path(project_root, "R/utils/validation.R"), local = TRUE)
+source(file.path(project_root, "R/utils/auth_helpers.R"), local = TRUE)
 source(file.path(project_root, "R/utils/scoring.R"), local = TRUE)
 source(file.path(project_root, "R/utils/ics_helpers.R"), local = TRUE)
 source(file.path(project_root, "R/utils/email_text_helpers.R"), local = TRUE)
+source(file.path(project_root, "R/utils/email_helpers.R"), local = TRUE)
 source(file.path(project_root, "R/utils/ui_helpers.R"), local = TRUE)
 source(file.path(project_root, "R/db/db_schema.R"), local = TRUE)
 source(file.path(project_root, "R/db/db_connect.R"), local = TRUE)

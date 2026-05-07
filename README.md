@@ -14,38 +14,53 @@ Keep the real `POLL_CREATION_SECRET` value only in Posit Connect Cloud environme
 
 ## User workflow
 
-1. The organizer creates a poll with meeting details, duration, time zone, proposed times, optional location details, optional response deadline / link expiry, and optional expected participants.
+1. The organizer creates a poll with meeting details, time zone, optional location details, a Doodle-style proposed-time grid, and an optional earlier response deadline.
 2. The app generates two links:
    - Public response link: `?respond=<token>`
    - Private organizer link: `?admin=<token>`
-3. Participants submit name, email, organization, availability for each option, and optional comments through a Doodle-like voting grid.
-4. The organizer reviews a decision-focused dashboard with the recommended time, response progress, ranked slots, a heatmap, responses, missing expected participants, and CSV exports.
+3. Participants submit name, optional email, availability for each option, and optional comments through a Doodle-like calendar response grid.
+4. The organizer reviews a decision-focused dashboard through either the private admin link or the email-code organizer portal at `?organizer=login`.
 5. The organizer selects the final time, generates copy-ready final email text, optionally downloads an `.ics` file, and closes the poll.
 
-Organizers can create multiple live booking polls at the same time. Each poll has its own public response link and private organizer link. There is no organizer login dashboard in this proof of concept, so save each private organizer link.
+Organizers can create multiple live booking polls at the same time. Each poll has its own public response link and private organizer link. The organizer portal lists polls tied to the organizer email used at creation. Private admin links still work and should still be saved.
 
 ## User experience
 
-The app uses a minimal white interface with near-black text and restrained cardinal red accents. The public participant page is intentionally simple:
+The app uses a minimal white interface with near-black text and restrained cardinal red accents. The organizer creation page uses a two-column meeting details form, optional browser-only organizer name/email memory, duration pills, and a week calendar for selecting proposed times.
+
+The public participant page is intentionally simple:
 
 - meeting summary first;
 - privacy notice before data entry;
-- one compact availability choice row per proposed time;
-- explicit labels for "Available and preferred", "Available", and "Unavailable";
+- a calendar-style availability grid showing only the dates and times proposed by the organizer;
+- explicit labels for "Preferred", "Available", and "Unavailable";
 - clear messaging that final meeting confirmation will follow from the organizer;
 - no public access to results, expected participant lists, or organizer-only details.
 
-The organizer dashboard is optimized for deciding quickly: the overview shows the best-ranked option, response progress, response-link status, shareable participant link, ranked options, heatmap, exports, and finalization controls.
+The organizer dashboard is optimized for deciding quickly: the overview shows the best-ranked option, response progress, response-link status, shareable participant link, ranked options, heatmap, exports, and finalization controls. The `?organizer=login` portal adds a Doodle-like "My polls" view for live, expired, closed, and finalized polls tied to the organizer's email.
+
+## Date, time, and time zones
+
+The app stores proposed meeting timestamps internally in UTC ISO 8601 form, such as `2026-05-06T13:00:00Z`. User-facing screens use readable meeting labels with the selected IANA time zone, for example:
+
+```text
+Wed, May 6th, 9-10 AM EDT
+America/Toronto
+```
+
+This avoids ambiguous numeric formats such as `05/06/2026` while keeping the interface easy to read for participants in different regions.
 
 ## Response link expiry and reopening
 
-Each poll can have an optional response deadline / link expiry date. Participants can respond through that date in the poll's time zone. Starting the next day, the response link shows a closed message with the organizer's name and email so the participant knows whom to contact.
+Each poll automatically expires after the final proposed meeting date. Organizers can optionally set an earlier response deadline / link expiry date. If the chosen date is later than the final proposed meeting date, the app caps the effective expiry at the final proposed meeting date.
+
+Participants can respond through the effective expiry date in the poll's time zone. Starting the next day, the response link shows a closed message with the organizer's name and email so the participant knows whom to contact.
 
 From the private organizer dashboard, non-finalized polls can be:
 
 - closed manually;
 - reopened with a new expiry date;
-- reopened without an expiry date.
+- reopened using the latest proposed meeting date as the expiry.
 
 Finalized polls cannot be reopened in this version. Create a new poll if a finalized meeting needs to be rescheduled.
 
@@ -63,9 +78,12 @@ For a simple manual setup, install the required packages:
 ```r
 install.packages(c(
   "shiny", "bslib", "DBI", "RSQLite", "pool", "DT",
-  "openssl", "digest", "htmltools", "testthat", "rsconnect"
+  "openssl", "digest", "htmltools", "testthat", "rsconnect",
+  "curl", "blastula"
 ))
 ```
+
+`blastula` is used when available for SMTP login-code email. The app can also send through `curl` when SMTP is configured. For local development without SMTP, set `ALLOW_DEV_AUTH_CODE_DISPLAY=true` to show organizer login codes on screen.
 
 ## Local database setup for proof of concept
 
@@ -110,6 +128,7 @@ Generated links use query-string routing:
 
 - `?respond=<response_token>` for participants
 - `?admin=<admin_token>` for the organizer
+- `?organizer=login` for the email-code organizer portal
 - `?create=<POLL_CREATION_SECRET>` for poll creation when `POLL_CREATION_SECRET` is set
 
 For link generation outside RStudio, set `APP_BASE_URL` in `.Renviron`:
@@ -117,6 +136,7 @@ For link generation outside RStudio, set `APP_BASE_URL` in `.Renviron`:
 ```text
 APP_BASE_URL=https://your-app.example.com
 SQLITE_DB_PATH=data/app.sqlite
+ORGANIZER_AUTH_SECRET=replace-with-a-long-random-value
 ```
 
 Use `.Renviron.example` as a template. Do not commit `.Renviron`.
@@ -179,19 +199,21 @@ Core tables:
 - `responses`
 - `finalized_meetings`
 - `audit_log`
+- `organizer_login_codes`
 
 All Shiny modules call the query layer in `R/db/db_queries.R`; raw SQL is not scattered through UI modules. Writes use parameterized queries and transaction wrappers.
 
 ## Security and privacy
 
-Treat all names, emails, organizations, comments, and availability data as sensitive personal information.
+Treat all names, optional emails, comments, and availability data as sensitive personal information.
 
 Implemented in this proof of concept:
 
 - Random 256-bit hex tokens for public and private links.
 - Admin tokens are stored as SHA-256 hashes, not raw tokens.
+- Organizer portal magic codes are stored only as hashes, expire after 10 minutes, and are limited to 5 verification attempts.
 - Public response links do not expose results.
-- Private organizer links are required for dashboard access.
+- Private organizer links or an email-code organizer portal login are required for dashboard access.
 - Closed or expired response links show organizer contact details so participants can ask whether the link can be reopened.
 - User input is validated, trimmed, length-limited, and escaped when rendered.
 - Database writes use parameterized DBI queries.
@@ -202,7 +224,8 @@ Implemented in this proof of concept:
 Production hardening recommendations:
 
 - Add reverse-proxy or platform-level rate limiting.
-- Add organization authentication for organizer/admin access.
+- Use a production SMTP account for organizer login codes and monitor failed login attempts without storing raw codes.
+- Add organization authentication for organizer/admin access if this grows beyond a lightweight email-code portal.
 - Add role-based access control if multiple organizers manage polls.
 - Use a hosted database with encrypted storage and managed backups.
 - Define a retention policy, such as deleting or anonymizing poll data after 30 to 90 days.
@@ -284,6 +307,7 @@ BookingApp/
 ```text
 SQLITE_DB_PATH=data/app.sqlite
 POLL_CREATION_SECRET=<your-private-creation-secret>
+ORGANIZER_AUTH_SECRET=<a-different-private-random-secret>
 ```
 
 If Connect Cloud shows the final public URL before publish, also set:
@@ -293,6 +317,20 @@ APP_BASE_URL=https://cpignanelli1994-meeting-availability-poll.share.connect.pos
 ```
 
 If you do not know the URL yet, publish first, copy the deployed URL, then add `APP_BASE_URL` in the content settings and republish/restart.
+
+To use the organizer portal on Connect Cloud, also configure SMTP:
+
+```text
+SMTP_HOST=<your-smtp-host>
+SMTP_PORT=587
+SMTP_USERNAME=<your-smtp-username>
+SMTP_PASSWORD=<your-smtp-password>
+SMTP_FROM=<verified-sender@example.org>
+SMTP_USE_SSL=false
+ALLOW_DEV_AUTH_CODE_DISPLAY=false
+```
+
+For local testing only, you may leave SMTP blank and set `ALLOW_DEV_AUTH_CODE_DISPLAY=true` so the app displays the login code after you request it.
 
 10. Create polls with:
 
@@ -452,7 +490,7 @@ Current tests cover:
 - Admin links are the only organizer authentication mechanism in v1.
 - No automated emails are sent.
 - No calendar integrations are implemented.
-- Participant response edit links are not implemented; resubmission by the same email replaces the previous response.
+- Participant response edit links are not implemented; resubmission replaces the previous response only when the participant provides the same email.
 - Rate limiting is documented but not implemented in app code.
 
 ## Future enhancements

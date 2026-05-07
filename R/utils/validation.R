@@ -16,7 +16,10 @@ html_escape <- function(value) {
 }
 
 normalize_email <- function(email) {
-  tolower(trimws(as.character(email %||% "")))
+  email <- as.character(email %||% "")
+  email <- email[!is.na(email)]
+  email <- paste(email, collapse = "")
+  tolower(trimws(email))
 }
 
 validate_email <- function(email, field = "Email") {
@@ -29,6 +32,14 @@ validate_email <- function(email, field = "Email") {
     stop(paste("Enter a valid", tolower(field), "address."), call. = FALSE)
   }
   email
+}
+
+validate_optional_email <- function(email, field = "Email") {
+  email <- normalize_email(email)
+  if (!nzchar(email)) {
+    return(NA_character_)
+  }
+  validate_email(email, field = field)
 }
 
 validate_duration <- function(duration_minutes) {

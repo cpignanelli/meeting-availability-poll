@@ -39,7 +39,7 @@ finalize_poll_server <- function(id, conn, dashboard_data, refresh) {
       shiny::div(
         class = "ready-box",
         shiny::strong("This poll has been finalized."),
-        shiny::p(paste("Selected time:", data$finalized$display_label[[1]]))
+        option_time_ui(data$finalized, data$poll$timezone[[1]], heading = "div")
       )
     })
 
@@ -48,7 +48,12 @@ finalize_poll_server <- function(id, conn, dashboard_data, refresh) {
       if (is.null(data) || nrow(data$options) == 0) {
         return(shiny::p(class = "helper-text", "No proposed time slots are available."))
       }
-      choices <- stats::setNames(data$options$option_id, data$options$display_label)
+      choices <- stats::setNames(
+        data$options$option_id,
+        vapply(seq_len(nrow(data$options)), function(i) {
+          format_readable_option_for_option(data$options[i, , drop = FALSE], data$poll$timezone[[1]])
+        }, character(1))
+      )
       selected <- if (!is.null(data$finalized)) data$finalized$selected_option_id[[1]] else data$options$option_id[[1]]
       shiny::selectInput(session$ns("selected_option_id"), "Selected meeting time", choices = choices, selected = selected)
     })
@@ -58,7 +63,7 @@ finalize_poll_server <- function(id, conn, dashboard_data, refresh) {
       if (is.null(data)) {
         return(NULL)
       }
-      if (identical(poll_display_status(data$poll), "finalized")) {
+      if (identical(poll_display_status(data$poll, data$options), "finalized")) {
         return(shiny::div(
           class = "button-row",
           shiny::downloadButton(session$ns("download_ics"), "Download .ics file", class = "btn-outline-secondary")

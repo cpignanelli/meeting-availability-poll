@@ -17,11 +17,12 @@ In Posit Connect Cloud, the app should have these environment variables:
 SQLITE_DB_PATH=data/app.sqlite
 APP_BASE_URL=https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/
 POLL_CREATION_SECRET=<your-private-creation-secret>
+ORGANIZER_AUTH_SECRET=<a-different-private-random-secret>
 ```
 
 Use the exact live URL above for `APP_BASE_URL`, including the trailing `/`.
 
-Do not commit the real value of `POLL_CREATION_SECRET` to GitHub. If you used an example value from an earlier draft of this guide, change it in Posit Connect Cloud to a new private value before sharing the app.
+Do not commit the real values of `POLL_CREATION_SECRET` or `ORGANIZER_AUTH_SECRET` to GitHub. If you used an example value from an earlier draft of this guide, change it in Posit Connect Cloud to a new private value before sharing the app.
 
 Your private poll creation URL is:
 
@@ -31,7 +32,9 @@ https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/?cre
 
 Share only the generated participant `?respond=<token>` links with colleagues. Keep both the creation URL and generated admin links private.
 
-You can create multiple live booking polls at the same time. Each poll has its own public response link, private organizer link, and optional response deadline / link expiry date. There is no organizer login dashboard in this proof of concept, so save the private organizer link for every poll you create.
+You can create multiple live booking polls at the same time. Each poll has its own public response link, private organizer link, and automatic link expiry after the final proposed meeting date. You can also set an earlier response deadline / link expiry date. The organizer portal is available at `?organizer=login` and lists polls tied to the organizer email used at creation. Save private organizer links as a backup.
+
+The app stores proposed times internally in UTC, such as `2026-05-06T13:00:00Z`, but shows readable local meeting options with the selected IANA time zone, such as `Wed, May 6th, 9-10 AM EDT` and `America/Toronto`.
 
 ## What You Are Publishing
 
@@ -248,6 +251,26 @@ POLL_CREATION_SECRET=<your-private-creation-secret>
 
 This secret keeps random public visitors from creating polls. Do not put this value in GitHub.
 
+Add a separate secret for organizer email-code login:
+
+```text
+ORGANIZER_AUTH_SECRET=<a-different-private-random-secret>
+```
+
+To use `?organizer=login` on Connect Cloud, configure SMTP variables:
+
+```text
+SMTP_HOST=<your-smtp-host>
+SMTP_PORT=587
+SMTP_USERNAME=<your-smtp-username>
+SMTP_PASSWORD=<your-smtp-password>
+SMTP_FROM=<verified-sender@example.org>
+SMTP_USE_SSL=false
+ALLOW_DEV_AUTH_CODE_DISPLAY=false
+```
+
+For local testing only, you can leave SMTP blank and set `ALLOW_DEV_AUTH_CODE_DISPLAY=true`; do not use that setting on a public app.
+
 If Connect Cloud already shows the final app URL, also add:
 
 ```text
@@ -302,7 +325,7 @@ Create a test poll. The app will show two links:
 - **Public response link**: send this to your colleague.
 - **Private organizer link**: keep this for yourself.
 
-If you set a response deadline / link expiry, participants can respond through that date. Starting the next day, the participant link will show a closed message with your organizer name and email. From the private organizer dashboard, you can close a non-finalized response link, reopen an expired or closed link with a new expiry date, or reopen it without an expiry date.
+Participants can respond through the effective expiry date. By default, that is the final proposed meeting date. If you set an earlier response deadline / link expiry, the earlier date is used. Starting the next day, the participant link will show a closed message with your organizer name and email. From the private organizer dashboard, you can close a non-finalized response link, reopen an expired or closed link with a new expiry date, or reopen it using the latest proposed meeting date as the expiry.
 
 ## Part 11: Free Plan Limits
 

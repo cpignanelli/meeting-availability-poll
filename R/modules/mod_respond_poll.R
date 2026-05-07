@@ -59,7 +59,14 @@ respond_poll_server <- function(id, conn, token) {
     output$respond_page <- shiny::renderUI({
       bundle <- poll_bundle()
       if (!is.null(bundle$error)) {
-        return(empty_state_ui("Invalid response link", bundle$error))
+        return(shiny::tagList(
+          page_header_ui(
+            eyebrow = "Response link",
+            title = "We could not open this poll",
+            subtitle = "Check that the link was copied correctly or ask the organizer to resend it."
+          ),
+          empty_state_ui("Invalid response link", bundle$error)
+        ))
       }
       poll <- bundle$poll
       options <- bundle$options
@@ -67,57 +74,86 @@ respond_poll_server <- function(id, conn, token) {
         return(shiny::tagList(
           page_header_ui(
             eyebrow = "Availability saved",
-            title = "Response submitted",
-            subtitle = "Your availability has been saved. Final meeting confirmation will follow from the organizer."
+            title = "Availability sent",
+            subtitle = "Your availability has been saved. The organizer will confirm the final meeting time after reviewing responses."
           ),
-          section_panel_ui(
-            "What happens next",
-            NULL,
-            shiny::p("The organizer will review all responses through their private dashboard and follow up with the final meeting time.")
-          )
+          response_success_ui(poll)
         ))
       }
-      display_status <- poll_display_status(poll)
+      display_status <- poll_display_status(poll, options)
       if (identical(display_status, "finalized")) {
-        return(empty_state_ui("This poll has been finalized", finalized_poll_contact_message(poll)))
+        return(shiny::tagList(
+          page_header_ui(
+            eyebrow = "Meeting availability poll",
+            title = poll$title[[1]],
+            subtitle = "This poll is no longer accepting responses."
+          ),
+          response_contact_state_ui("This poll has been finalized", finalized_poll_contact_message(poll), poll)
+        ))
       }
       if (identical(display_status, "expired")) {
-        return(closed_poll_contact_ui(poll, "This booking link has expired"))
+        return(shiny::tagList(
+          page_header_ui(
+            eyebrow = "Meeting availability poll",
+            title = poll$title[[1]],
+            subtitle = "This response link is no longer accepting availability."
+          ),
+          closed_poll_contact_ui(poll, "This booking link has expired")
+        ))
       }
       if (!identical(display_status, "open")) {
-        return(closed_poll_contact_ui(poll, "This booking link is closed"))
+        return(shiny::tagList(
+          page_header_ui(
+            eyebrow = "Meeting availability poll",
+            title = poll$title[[1]],
+            subtitle = "This response link is currently closed."
+          ),
+          closed_poll_contact_ui(poll, "This booking link is closed")
+        ))
       }
 
       shiny::tagList(
         page_header_ui(
           eyebrow = "Meeting availability poll",
           title = poll$title[[1]],
-          subtitle = poll$description[[1]],
-          meta = detail_grid_ui(poll_detail_items(poll))
-        ),
-        privacy_notice_ui(compact = TRUE),
-        section_panel_ui(
-          "Your details",
-          "Use the email address the organizer knows. If you respond again with the same email, your latest response replaces the earlier one.",
-          shiny::fluidRow(
-            shiny::column(4, shiny::textInput(session$ns("name"), "Name")),
-            shiny::column(4, shiny::textInput(session$ns("email"), "Email")),
-            shiny::column(4, shiny::textInput(session$ns("organization"), "Organization"))
-          )
-        ),
-        section_panel_ui(
-          "Choose your availability",
-          "Available and preferred means you can attend and this time works especially well for you. Final meeting confirmation will follow from the organizer.",
-          availability_legend_ui(),
-          build_response_matrix_ui(session$ns, options)
+          subtitle = poll$description[[1]]
         ),
         shiny::div(
-          class = "response-submit-bar",
-          shiny::uiOutput(session$ns("completion_status")),
-          shiny::div(
-            class = "response-submit-actions",
-            shiny::textAreaInput(session$ns("comments"), "Optional comments", rows = 2, placeholder = "Anything the organizer should know?"),
-            shiny::actionButton(session$ns("submit_response"), "Submit my availability", class = "btn-primary btn-lg")
+          class = "respond-flow",
+          section_panel_ui(
+            "1. Review meeting details",
+            NULL,
+            shiny::div(class = "respond-detail-card", detail_grid_ui(response_poll_detail_items(poll, options)))
+          ),
+          section_panel_ui(
+            "2. Tell us who you are",
+            "Email is optional. If you include it and respond again with the same email, your latest response replaces the earlier one.",
+            shiny::div(
+              class = "respond-identity-grid",
+              shiny::div(class = "form-field", shiny::textInput(session$ns("name"), "Name")),
+              shiny::div(class = "form-field", shiny::textInput(session$ns("email"), "Email (optional)"))
+            ),
+            response_privacy_callout_ui()
+          ),
+          section_panel_ui(
+            "3. Choose your availability",
+            NULL,
+            shiny::uiOutput(session$ns("completion_status")),
+            build_response_calendar_ui(session$ns, options, poll$timezone[[1]])
+          ),
+          section_panel_ui(
+            "Send your response",
+            NULL,
+            shiny::div(
+              class = "response-submit-panel",
+              shiny::textAreaInput(session$ns("comments"), "Optional comments", rows = 3, placeholder = "Anything the organizer should know?"),
+              response_notice_ui(
+                "Before you send",
+                "Final meeting confirmation will follow from the organizer.",
+                "subtle"
+              ),
+              shiny::actionButton(session$ns("submit_response"), "Send availability", class = "btn-primary btn-lg response-submit-button")
+            )
           )
         )
       )
@@ -132,13 +168,13 @@ respond_poll_server <- function(id, conn, token) {
       poll <- bundle$poll
       options <- bundle$options
       tryCatch({
-        if (!poll_accepts_responses(poll)) {
+        if (!poll_accepts_responses(poll, options)) {
           stop("This poll is no longer accepting responses.", call. = FALSE)
         }
         participant <- list(
           name = sanitize_text(input$name, max_chars = 160, required = TRUE, field = "Name"),
-          email = validate_email(input$email, field = "Email"),
-          organization = sanitize_text(input$organization, max_chars = 160, required = TRUE, field = "Organization")
+          email = input$email %||% "",
+          organization = ""
         )
         response_values <- data.frame(
           option_id = options$option_id,
@@ -150,7 +186,7 @@ respond_poll_server <- function(id, conn, token) {
         comment <- sanitize_text(input$comments, max_chars = 2000)
         submit_poll_response(conn, poll$poll_id[[1]], participant, response_values, comment)
         submitted(TRUE)
-        shiny::showNotification("Your response has been saved.", type = "message")
+        shiny::showNotification("Your availability has been saved.", type = "message")
       }, error = function(e) {
         shiny::showNotification(safe_error_message(e), type = "error", duration = 8)
       })
@@ -158,20 +194,20 @@ respond_poll_server <- function(id, conn, token) {
   })
 }
 
-build_response_option_ui <- function(ns, option, index, total) {
+build_response_option_ui <- function(ns, option, index, total, timezone) {
   shiny::div(
     class = "response-matrix-row",
     shiny::div(
       class = "response-time-cell",
       shiny::span(class = "option-kicker", paste("Option", index, "of", total)),
-      shiny::h3(option$display_label[[1]])
+      option_time_ui(option, timezone, show_context = FALSE)
     ),
     shiny::div(
-      class = "availability-vote",
+      class = "availability-vote response-choice-set",
       shiny::radioButtons(
         ns(paste0("availability_", option$option_id[[1]])),
-        "Choose one",
-        choices = availability_choices(),
+        "Choose availability",
+        choices = response_availability_choices(),
         selected = character(0),
         inline = TRUE
       )
@@ -179,20 +215,183 @@ build_response_option_ui <- function(ns, option, index, total) {
   )
 }
 
-build_response_matrix_ui <- function(ns, options) {
-  rows <- lapply(seq_len(nrow(options)), function(i) {
-    build_response_option_ui(ns, options[i, , drop = FALSE], i, nrow(options))
+build_response_matrix_ui <- function(ns, options, timezone) {
+  build_response_calendar_ui(ns, options, timezone)
+}
+
+build_response_calendar_ui <- function(ns, options, timezone) {
+  calendar <- response_calendar_data(options, timezone)
+  if (nrow(calendar) == 0) {
+    return(empty_state_ui("No proposed times", "This poll does not have any proposed meeting times."))
+  }
+
+  week_keys <- unique(calendar$week_key)
+  default_week <- default_response_week(calendar)
+  panels <- lapply(week_keys, function(week_key) {
+    week_options <- calendar[calendar$week_key == week_key, , drop = FALSE]
+    shiny::tabPanel(
+      title = week_options$week_label[[1]],
+      value = week_key,
+      response_week_calendar_ui(ns, week_options, timezone)
+    )
   })
 
   shiny::div(
-    class = "response-matrix",
+    class = "response-calendar",
     shiny::div(
-      class = "response-matrix-header",
-      shiny::span("Proposed time"),
-      shiny::span("Preferred"),
-      shiny::span("Available"),
-      shiny::span("Unavailable")
+      class = "response-calendar-note",
+      shiny::strong("Select one response for each proposed time."),
+      shiny::span(paste("Times shown in", unique(calendar$timezone_label)[[1]]))
     ),
-    rows
+    do.call(
+      shiny::tabsetPanel,
+      c(list(type = "pills", selected = default_week, id = ns("response_week_tabs")), panels)
+    )
   )
+}
+
+response_calendar_data <- function(options, timezone) {
+  if (is.null(options) || nrow(options) == 0) {
+    return(data.frame())
+  }
+  starts <- parse_utc_timestamp(options$start_datetime)
+  ends <- parse_utc_timestamp(options$end_datetime)
+  local_dates <- as.Date(format(starts, "%Y-%m-%d", tz = timezone))
+  week_starts <- calendar_week_start(local_dates)
+  is_all_day <- as.numeric(difftime(ends, starts, units = "mins")) >= 1440
+  local_times <- ifelse(is_all_day, "all_day", format(starts, "%H:%M", tz = timezone))
+  local_time_labels <- vapply(seq_along(starts), function(i) {
+    if (isTRUE(is_all_day[[i]])) "All day" else format_readable_clock(starts[[i]], timezone)
+  }, character(1))
+  local_date_labels <- vapply(seq_along(local_dates), function(i) {
+    format_readable_date(local_dates[i], include_year = FALSE, ordinal = FALSE)
+  }, character(1))
+  timezone_labels <- vapply(seq_along(starts), function(i) {
+    format_timezone_abbreviation(starts[i], timezone)
+  }, character(1))
+  week_labels <- vapply(seq_along(week_starts), function(i) {
+    calendar_week_label(week_starts[i])
+  }, character(1))
+  data.frame(
+    options,
+    local_date = local_dates,
+    local_time = local_times,
+    local_time_label = local_time_labels,
+    local_date_label = local_date_labels,
+    week_start = week_starts,
+    week_key = paste0("week_", format(week_starts, "%Y_%m_%d")),
+    week_label = week_labels,
+    timezone_label = timezone_labels,
+    stringsAsFactors = FALSE
+  )
+}
+
+default_response_week <- function(calendar) {
+  today <- Sys.Date()
+  upcoming <- calendar[calendar$local_date >= today, , drop = FALSE]
+  if (nrow(upcoming) > 0) {
+    return(upcoming$week_key[[1]])
+  }
+  calendar$week_key[[1]]
+}
+
+response_week_calendar_ui <- function(ns, week_options, timezone) {
+  dates <- unique(week_options$local_date)
+  times <- unique(week_options$local_time)
+  times <- times[order(ifelse(times == "all_day", -1, match(times, sort(times))))]
+
+  header <- shiny::tags$tr(
+    shiny::tags$th("Time"),
+    lapply(dates, function(date_value) {
+      shiny::tags$th(
+        shiny::span(class = "calendar-day-name", format(date_value, "%a")),
+        shiny::strong(paste0(format(date_value, "%b "), as.integer(format(date_value, "%d"))))
+      )
+    })
+  )
+
+  rows <- lapply(times, function(time_value) {
+    time_label <- week_options$local_time_label[week_options$local_time == time_value][[1]]
+    cells <- lapply(dates, function(date_value) {
+      option <- week_options[
+        week_options$local_date == date_value & week_options$local_time == time_value,
+        ,
+        drop = FALSE
+      ]
+      if (nrow(option) == 0) {
+        return(shiny::tags$td(class = "response-calendar-empty", ""))
+      }
+      shiny::tags$td(
+        class = "response-calendar-option-cell",
+        shiny::div(
+          class = "response-calendar-option",
+          shiny::span(class = "response-calendar-option-time", format_readable_option_for_option(option, timezone)),
+          shiny::div(
+            class = "availability-vote response-calendar-choice-set",
+            shiny::radioButtons(
+              ns(paste0("availability_", option$option_id[[1]])),
+              "Choose availability",
+              choices = response_availability_choices(),
+              selected = character(0),
+              inline = TRUE
+            )
+          )
+        )
+      )
+    })
+    shiny::tags$tr(
+      shiny::tags$th(class = "response-calendar-time", time_label),
+      cells
+    )
+  })
+
+  shiny::div(
+    class = "response-calendar-scroll",
+    shiny::tags$table(
+      class = "response-calendar-table",
+      shiny::tags$thead(header),
+      shiny::tags$tbody(rows)
+    ),
+    response_mobile_date_cards_ui(ns, week_options, timezone)
+  )
+}
+
+response_mobile_date_cards_ui <- function(ns, week_options, timezone) {
+  dates <- unique(week_options$local_date)
+  cards <- lapply(dates, function(date_value) {
+    day_options <- week_options[week_options$local_date == date_value, , drop = FALSE]
+    day_options <- day_options[order(day_options$local_time), , drop = FALSE]
+    shiny::div(
+      class = "response-date-card",
+      shiny::h3(day_options$local_date_label[[1]]),
+      lapply(seq_len(nrow(day_options)), function(i) {
+        option <- day_options[i, , drop = FALSE]
+        shiny::div(
+          class = "response-date-option",
+          shiny::strong(format_readable_option_for_option(option, timezone)),
+          shiny::div(
+            class = "availability-vote response-calendar-choice-set",
+            response_mobile_choice_buttons(ns, option$option_id[[1]])
+          )
+        )
+      })
+    )
+  })
+  shiny::div(class = "response-mobile-date-cards", cards)
+}
+
+response_mobile_choice_buttons <- function(ns, option_id) {
+  input_id <- ns(paste0("availability_", option_id))
+  choices <- response_availability_choices()
+  buttons <- lapply(names(choices), function(label) {
+    value <- choices[[label]]
+    shiny::tags$button(
+      type = "button",
+      class = "mobile-availability-button",
+      `data-availability-input` = input_id,
+      `data-availability-value` = value,
+      label
+    )
+  })
+  shiny::div(class = "mobile-availability-buttons", buttons)
 }

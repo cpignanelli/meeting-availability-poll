@@ -3,14 +3,23 @@ score_value <- function(availability) {
   ifelse(availability == "preferred", 2L, ifelse(availability == "available", 1L, 0L))
 }
 
-rank_time_options <- function(options, responses, participants = data.frame(), expected = data.frame()) {
+rank_time_options <- function(options, responses, participants = data.frame(), expected = data.frame(), timezone = NULL) {
   if (nrow(options) == 0) {
     return(data.frame())
   }
 
   ranked <- data.frame(
     option_id = options$option_id,
-    time_option = options$display_label,
+    start_datetime = options$start_datetime,
+    end_datetime = options$end_datetime,
+    time_option = if (!is.null(timezone)) {
+      vapply(seq_len(nrow(options)), function(i) {
+        format_readable_option_for_option(options[i, , drop = FALSE], timezone)
+      }, character(1))
+    } else {
+      options$display_label
+    },
+    time_zone = timezone %||% "",
     preferred_count = integer(nrow(options)),
     available_count = integer(nrow(options)),
     unavailable_count = integer(nrow(options)),
@@ -67,7 +76,7 @@ rank_time_options <- function(options, responses, participants = data.frame(), e
   ranked
 }
 
-build_availability_matrix <- function(options, responses, participants) {
+build_availability_matrix <- function(options, responses, participants, timezone = NULL) {
   if (nrow(participants) == 0 || nrow(options) == 0) {
     return(data.frame())
   }
@@ -85,12 +94,21 @@ build_availability_matrix <- function(options, responses, participants) {
         drop = FALSE
       ]
       availability <- if (nrow(response) == 0) "missing" else response$availability[[1]]
+      participant_email <- as.character(participant$email[[1]] %||% "")
+      participant_organization <- as.character(participant$organization[[1]] %||% "")
+      if (is.na(participant_email)) participant_email <- ""
+      if (is.na(participant_organization)) participant_organization <- ""
       rows[[counter]] <- data.frame(
+        participant_id = participant$participant_id[[1]],
         participant = participant$name[[1]],
-        email = participant$email[[1]],
-        organization = participant$organization[[1]],
+        email = participant_email,
+        organization = participant_organization,
         option_id = option$option_id[[1]],
-        time_option = option$display_label[[1]],
+        time_option = if (!is.null(timezone)) {
+          format_readable_option_for_option(option, timezone)
+        } else {
+          option$display_label[[1]]
+        },
         availability = availability,
         availability_label = availability_label(availability),
         stringsAsFactors = FALSE

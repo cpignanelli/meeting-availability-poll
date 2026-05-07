@@ -12,6 +12,23 @@ SQLITE_DB_PATH=data/app.sqlite
 # If set, create polls at ?create=<this-value>. Participant/admin links do not need it.
 POLL_CREATION_SECRET=replace-with-a-private-random-value
 
+# Organizer portal email-code login.
+# Set ORGANIZER_AUTH_SECRET to a long random value. It is used to hash login codes.
+ORGANIZER_AUTH_SECRET=replace-with-a-different-private-random-value
+
+# SMTP settings for sending organizer login codes.
+# Leave blank for local development unless you have an SMTP account.
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_FROM=
+SMTP_USE_SSL=false
+
+# Local development only: if true and SMTP is not configured, the login code is shown on screen.
+# Do not enable this on public deployments.
+ALLOW_DEV_AUTH_CODE_DISPLAY=false
+
 # Future hosted database settings. Do not commit real values.
 # DATABASE_URL=
 # DB_HOST=

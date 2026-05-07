@@ -1,8 +1,10 @@
 source("R/utils/time_helpers.R", local = TRUE)
 source("R/utils/validation.R", local = TRUE)
+source("R/utils/auth_helpers.R", local = TRUE)
 source("R/utils/scoring.R", local = TRUE)
 source("R/utils/ics_helpers.R", local = TRUE)
 source("R/utils/email_text_helpers.R", local = TRUE)
+source("R/utils/email_helpers.R", local = TRUE)
 source("R/utils/ui_helpers.R", local = TRUE)
 source("R/db/db_schema.R", local = TRUE)
 source("R/db/db_connect.R", local = TRUE)
@@ -12,6 +14,7 @@ source("R/modules/mod_create_poll.R", local = TRUE)
 source("R/modules/mod_respond_poll.R", local = TRUE)
 source("R/modules/mod_finalize_poll.R", local = TRUE)
 source("R/modules/mod_admin_dashboard.R", local = TRUE)
+source("R/modules/mod_organizer_portal.R", local = TRUE)
 
 required_packages <- c("shiny", "bslib", "DBI", "RSQLite", "pool", "DT", "openssl", "digest", "htmltools")
 missing_packages <- required_packages[!vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)]
@@ -49,6 +52,8 @@ server <- function(input, output, session) {
       respond_poll_ui("respond")
     } else if (!is.null(params$admin) && nzchar(params$admin)) {
       admin_dashboard_ui("admin")
+    } else if (!is.null(params$organizer) && identical(params$organizer, "login")) {
+      organizer_portal_ui("organizer")
     } else if (can_create_poll(params)) {
       create_poll_ui("create")
     } else {
@@ -59,6 +64,7 @@ server <- function(input, output, session) {
   create_poll_server("create", db)
   respond_poll_server("respond", db, token = shiny::reactive(query()[["respond"]] %||% ""))
   admin_dashboard_server("admin", db, token = shiny::reactive(query()[["admin"]] %||% ""))
+  organizer_portal_server("organizer", db)
 }
 
 shiny::shinyApp(ui, server)

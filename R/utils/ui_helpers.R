@@ -87,7 +87,7 @@ privacy_notice_ui <- function(compact = FALSE) {
   shiny::div(
     class = if (compact) "privacy-notice privacy-notice-compact" else "privacy-notice",
     shiny::strong("Privacy notice"),
-    shiny::p("This form collects your name, email, organization, availability, and optional comments so the organizer can choose a meeting time. Results are visible only through the private organizer link.")
+    shiny::p("This form collects your name, optional email, availability, and optional comments so the organizer can choose a meeting time. Results are visible only through the private organizer link.")
   )
 }
 
@@ -115,9 +115,21 @@ status_pill_ui <- function(status, label = NULL) {
   )
 }
 
-poll_display_status <- function(poll) {
+poll_effective_deadline <- function(poll, options = NULL) {
+  stored_deadline <- poll$response_deadline[[1]] %||% ""
+  if (nzchar(stored_deadline)) {
+    return(stored_deadline)
+  }
+  if (!is.null(options) && nrow(options) > 0) {
+    return(as.character(latest_option_date(options, poll$timezone[[1]])))
+  }
+  ""
+}
+
+poll_display_status <- function(poll, options = NULL) {
   status <- tolower(ui_text(poll$status[[1]], "unknown"))
-  if (identical(status, "open") && deadline_has_passed(poll$response_deadline[[1]], poll$timezone[[1]])) {
+  response_deadline <- poll_effective_deadline(poll, options)
+  if (identical(status, "open") && deadline_has_passed(response_deadline, poll$timezone[[1]])) {
     return("expired")
   }
   status
@@ -135,8 +147,8 @@ poll_display_status_label <- function(status) {
   if (is.na(value)) "Unknown" else value
 }
 
-poll_accepts_responses <- function(poll) {
-  identical(poll_display_status(poll), "open")
+poll_accepts_responses <- function(poll, options = NULL) {
+  identical(poll_display_status(poll, options), "open")
 }
 
 closed_poll_contact_message <- function(poll) {
@@ -160,9 +172,10 @@ finalized_poll_contact_message <- function(poll) {
 }
 
 closed_poll_contact_ui <- function(poll, title = "This booking link is closed") {
-  empty_state_ui(
-    title,
-    closed_poll_contact_message(poll)
+  response_contact_state_ui(
+    title = title,
+    message = closed_poll_contact_message(poll),
+    poll = poll
   )
 }
 
@@ -175,6 +188,19 @@ status_banner_ui <- function(status, title, message, action = NULL) {
       shiny::p(message)
     ),
     action
+  )
+}
+
+option_time_ui <- function(option, timezone, heading = "h3", show_context = TRUE) {
+  primary <- format_readable_option_for_option(option, timezone)
+  context <- timezone
+  heading_tag <- shiny::tags[[heading]]
+  shiny::div(
+    class = "time-display",
+    heading_tag(class = "time-display-primary", primary),
+    if (isTRUE(show_context)) {
+      shiny::span(class = "time-display-secondary", context)
+    }
   )
 }
 
@@ -256,6 +282,62 @@ availability_legend_ui <- function() {
   )
 }
 
+response_availability_choices <- function() {
+  c(
+    "Preferred" = "preferred",
+    "Available" = "available",
+    "Unavailable" = "unavailable"
+  )
+}
+
+response_notice_ui <- function(title, message, variant = "info") {
+  shiny::div(
+    class = paste("response-notice", paste0("response-notice-", variant)),
+    shiny::strong(title),
+    shiny::p(message)
+  )
+}
+
+response_privacy_callout_ui <- function() {
+  response_notice_ui(
+    "Your information is private to the organizer",
+    "Your name, optional email, availability, and comments are visible only through the private organizer link.",
+    "privacy"
+  )
+}
+
+response_contact_state_ui <- function(title, message, poll) {
+  shiny::div(
+    class = "empty-state response-contact-state",
+    shiny::div(class = "empty-state-mark", "!"),
+    shiny::h2(title),
+    shiny::p(message),
+    shiny::div(
+      class = "response-contact-card",
+      shiny::span(class = "detail-label", "Organizer contact"),
+      shiny::strong(ui_text(poll$organizer_name[[1]], "The organizer")),
+      shiny::span(ui_text(poll$organizer_email[[1]], "Organizer email unavailable"))
+    )
+  )
+}
+
+response_success_ui <- function(poll) {
+  shiny::div(
+    class = "response-success-panel",
+    response_notice_ui(
+      "Final confirmation will follow",
+      "The organizer will review all responses through their private dashboard and follow up with the final meeting time.",
+      "success"
+    ),
+    shiny::div(
+      class = "response-contact-card",
+      shiny::span(class = "detail-label", "Organizer"),
+      shiny::strong(ui_text(poll$organizer_name[[1]], "The organizer")),
+      shiny::span(ui_text(poll$organizer_email[[1]], "Organizer email unavailable"))
+    )
+  )
+}
+
 validation_summary_ui <- function(message) {
   shiny::div(
     class = "validation-summary",
@@ -264,7 +346,7 @@ validation_summary_ui <- function(message) {
   )
 }
 
-poll_detail_items <- function(poll) {
+poll_detail_items <- function(poll, options = NULL) {
   location <- ui_text(poll$location_details[[1]], "")
   location_type <- ui_text(poll$location_type[[1]], "")
   location_value <- if (nzchar(location)) {
@@ -272,12 +354,37 @@ poll_detail_items <- function(poll) {
   } else {
     location_type
   }
+  reference_utc <- if (!is.null(options) && nrow(options) > 0) options$start_datetime[[1]] else NULL
 
   list(
     list(label = "Organizer", value = poll$organizer_name[[1]]),
     list(label = "Duration", value = paste(poll$duration_minutes[[1]], "minutes")),
-    list(label = "Time zone", value = poll$timezone[[1]]),
-    list(label = "Link expiry", value = format_deadline_label(poll$response_deadline[[1]])),
+    list(label = "Time zone", value = timezone_with_offset_label(poll$timezone[[1]], reference_utc)),
+    list(label = "Link expiry", value = format_deadline_label(poll_effective_deadline(poll, options))),
     list(label = "Location", value = location_value)
+  )
+}
+
+response_poll_detail_items <- function(poll, options = NULL) {
+  location <- ui_text(poll$location_details[[1]], "")
+  location_type <- ui_text(poll$location_type[[1]], "")
+  location_value <- if (nzchar(location)) {
+    paste(location_type, location, sep = ": ")
+  } else {
+    location_type
+  }
+  reference_utc <- if (!is.null(options) && nrow(options) > 0) options$start_datetime[[1]] else NULL
+  times_shown <- if (!is.null(reference_utc) && nzchar(reference_utc)) {
+    format_timezone_abbreviation(parse_utc_timestamp(reference_utc), poll$timezone[[1]])
+  } else {
+    poll$timezone[[1]]
+  }
+
+  list(
+    list(label = "Organizer", value = poll$organizer_name[[1]]),
+    list(label = "Duration", value = paste(poll$duration_minutes[[1]], "minutes")),
+    list(label = "Link expiry", value = format_deadline_label(poll_effective_deadline(poll, options))),
+    list(label = "Location", value = location_value),
+    list(label = "Times shown", value = times_shown)
   )
 }

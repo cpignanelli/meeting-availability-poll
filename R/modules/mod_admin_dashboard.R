@@ -1,23 +1,35 @@
 admin_dashboard_ui <- function(id) {
-  ns <- shiny::NS(id)
   shiny::div(
     class = "app-shell admin-shell",
     app_topbar_ui("Organizer Dashboard"),
-    shiny::uiOutput(ns("admin_page"))
+    admin_dashboard_body_ui(id)
   )
 }
 
-admin_dashboard_server <- function(id, conn, token) {
+admin_dashboard_body_ui <- function(id) {
+  ns <- shiny::NS(id)
+  shiny::uiOutput(ns("admin_page"))
+}
+
+admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organizer_email = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
+    token <- token %||% shiny::reactive("")
+    poll_id <- poll_id %||% shiny::reactive(NULL)
+    organizer_email <- organizer_email %||% shiny::reactive("")
     refresh_counter <- shiny::reactiveVal(0L)
     refresh <- function() refresh_counter(refresh_counter() + 1L)
 
     poll <- shiny::reactive({
       token_value <- token()
-      if (is.null(token_value) || !nzchar(token_value)) {
+      if (!is.null(token_value) && nzchar(token_value)) {
+        return(tryCatch(get_poll_by_admin_token(conn, token_value), error = function(e) NULL))
+      }
+      current_poll_id <- poll_id()
+      current_email <- organizer_email()
+      if (is.null(current_poll_id) || !nzchar(current_email %||% "")) {
         return(NULL)
       }
-      tryCatch(get_poll_by_admin_token(conn, token_value), error = function(e) NULL)
+      tryCatch(get_poll_for_organizer(conn, current_poll_id, current_email), error = function(e) NULL)
     })
 
     dashboard_data <- shiny::reactive({
@@ -41,8 +53,8 @@ admin_dashboard_server <- function(id, conn, token) {
           title = data$poll$title[[1]],
           subtitle = data$poll$description[[1]],
           meta = shiny::tagList(
-            status_pill_ui(poll_display_status(data$poll)),
-            detail_grid_ui(poll_detail_items(data$poll))
+            status_pill_ui(poll_display_status(data$poll, data$options)),
+            detail_grid_ui(poll_detail_items(data$poll, data$options))
           )
         ),
         shiny::div(
@@ -119,7 +131,7 @@ admin_dashboard_server <- function(id, conn, token) {
         shiny::div(
           class = "decision-card",
           shiny::div(class = "decision-kicker", "Top-ranked option"),
-          shiny::h3(best$time_option[[1]]),
+          option_time_ui(best, data$poll$timezone[[1]], heading = "h3"),
           shiny::div(
             class = "decision-stats",
             decision_stat_ui("Score", best$availability_score[[1]], emphasis = TRUE),
@@ -135,14 +147,14 @@ admin_dashboard_server <- function(id, conn, token) {
       data <- dashboard_data()
       if (is.null(data)) return(NULL)
       response_link <- build_app_link(session, "respond", data$poll$response_token[[1]])
-      display_status <- poll_display_status(data$poll)
+      display_status <- poll_display_status(data$poll, data$options)
       section_panel_ui(
         "Response link",
         "Send this public link to participants. It allows response submission only.",
         status_banner_ui(
           display_status,
           paste("Link status:", poll_display_status_label(display_status)),
-          response_link_status_message(data$poll, display_status)
+          response_link_status_message(data$poll, data$options, display_status)
         ),
         copy_field_ui(session$ns("response_link_admin_copy"), "Public response link", response_link),
         response_link_controls_ui(session$ns, display_status)
@@ -162,8 +174,8 @@ admin_dashboard_server <- function(id, conn, token) {
         class = "summary-grid",
         metric_card_ui("Responses", response_progress, if (expected_count > 0) "Expected participant progress" else "Submitted responses"),
         metric_card_ui("Proposed slots", nrow(data$options)),
-        metric_card_ui("Link expiry", format_deadline_label(data$poll$response_deadline[[1]])),
-        metric_card_ui("Poll status", poll_display_status_label(poll_display_status(data$poll)))
+        metric_card_ui("Link expiry", format_deadline_label(poll_effective_deadline(data$poll, data$options))),
+        metric_card_ui("Poll status", poll_display_status_label(poll_display_status(data$poll, data$options)))
       )
     })
 
@@ -172,7 +184,7 @@ admin_dashboard_server <- function(id, conn, token) {
       if (is.null(data) || nrow(data$ranked) == 0) {
         return(empty_state_ui("No proposed times", "This poll does not have proposed time slots."))
       }
-      build_ranked_cards(data$ranked, nrow(data$participants))
+      build_ranked_cards(data$ranked, nrow(data$participants), data$poll$timezone[[1]])
     })
 
     output$ranked_table <- DT::renderDT({
@@ -186,12 +198,7 @@ admin_dashboard_server <- function(id, conn, token) {
       if (is.null(data) || nrow(data$responses) == 0) {
         return(data.frame(Message = "No participant responses yet."))
       }
-      responses <- transform(
-        data$responses[c("name", "email", "organization", "display_label", "availability", "comment")],
-        availability = vapply(availability, availability_label, character(1))
-      )
-      names(responses) <- c("Name", "Email", "Organization", "Time option", "Availability", "Comment")
-      responses
+      format_responses_table(data$responses, data$poll$timezone[[1]])
     }, rownames = FALSE, escape = TRUE, options = list(pageLength = 10, scrollX = TRUE))
 
     output$heatmap <- shiny::renderUI({
@@ -199,7 +206,7 @@ admin_dashboard_server <- function(id, conn, token) {
       if (is.null(data) || nrow(data$participants) == 0) {
         return(empty_state_ui("No responses yet", "The heatmap will appear after participants submit availability."))
       }
-      build_heatmap_table(data$participants, data$options, data$heatmap)
+      build_heatmap_table(data$participants, data$options, data$heatmap, data$poll$timezone[[1]])
     })
 
     output$missing_expected <- shiny::renderUI({
@@ -229,7 +236,7 @@ admin_dashboard_server <- function(id, conn, token) {
       filename = function() "ranked-time-slots.csv",
       content = function(file) {
         data <- dashboard_data()
-        utils::write.csv(data$ranked, file, row.names = FALSE, na = "")
+        utils::write.csv(format_ranked_table(data$ranked), file, row.names = FALSE, na = "")
       }
     )
 
@@ -237,7 +244,7 @@ admin_dashboard_server <- function(id, conn, token) {
       filename = function() "participant-responses.csv",
       content = function(file) {
         data <- dashboard_data()
-        utils::write.csv(data$responses, file, row.names = FALSE, na = "")
+        utils::write.csv(format_responses_table(data$responses, data$poll$timezone[[1]]), file, row.names = FALSE, na = "")
       }
     )
 
@@ -261,21 +268,23 @@ admin_dashboard_server <- function(id, conn, token) {
         if (is.null(data)) {
           stop("Poll not found.", call. = FALSE)
         }
-        if (identical(poll_display_status(data$poll), "finalized")) {
+        if (identical(poll_display_status(data$poll, data$options), "finalized")) {
           stop("Finalized polls cannot be reopened.", call. = FALSE)
         }
 
-        no_deadline <- isTRUE(input$reopen_without_deadline)
-        new_deadline <- if (no_deadline) "" else input$reopen_deadline
-        if (!no_deadline) {
+        use_latest_date <- isTRUE(input$reopen_use_latest_date)
+        if (use_latest_date) {
+          new_deadline <- resolve_response_deadline(FALSE, "", data$options, data$poll$timezone[[1]])
+        } else {
+          new_deadline <- input$reopen_deadline
           if (is.null(new_deadline) || is.na(new_deadline)) {
-            stop("Choose a new expiry date or reopen without an expiry date.", call. = FALSE)
+            stop("Choose a new expiry date or use the latest proposed meeting date.", call. = FALSE)
           }
           today_local <- as.Date(format(Sys.time(), tz = data$poll$timezone[[1]], usetz = FALSE))
           if (as.Date(new_deadline) < today_local) {
             stop("Choose today or a future date for the reopened response link.", call. = FALSE)
           }
-          new_deadline <- as.character(as.Date(new_deadline))
+          new_deadline <- resolve_response_deadline(TRUE, new_deadline, data$options, data$poll$timezone[[1]])
         }
 
         reopen_poll(conn, data$poll$poll_id[[1]], new_deadline)
@@ -290,8 +299,8 @@ admin_dashboard_server <- function(id, conn, token) {
   })
 }
 
-response_link_status_message <- function(poll, display_status) {
-  deadline <- format_deadline_label(poll$response_deadline[[1]])
+response_link_status_message <- function(poll, options, display_status) {
+  deadline <- format_deadline_label(poll_effective_deadline(poll, options))
   if (identical(display_status, "open")) {
     return(paste("Participants can respond. Current expiry:", deadline))
   }
@@ -321,8 +330,11 @@ response_link_controls_ui <- function(ns, display_status) {
 
   shiny::div(
     class = "response-link-controls reopen-controls",
-    shiny::dateInput(ns("reopen_deadline"), "New response deadline / link expiry", value = Sys.Date() + 7L),
-    shiny::checkboxInput(ns("reopen_without_deadline"), "Reopen without an expiry date", value = FALSE),
+    shiny::checkboxInput(ns("reopen_use_latest_date"), "Use the latest proposed meeting date as the expiry", value = TRUE),
+    shiny::conditionalPanel(
+      condition = sprintf("!input['%s']", ns("reopen_use_latest_date")),
+      shiny::dateInput(ns("reopen_deadline"), "New response deadline / link expiry", value = Sys.Date() + 7L, format = "yyyy-mm-dd")
+    ),
     shiny::actionButton(ns("reopen_response_link"), "Reopen response link", class = "btn-primary")
   )
 }
@@ -333,6 +345,9 @@ format_ranked_table <- function(ranked) {
   }
   formatted <- ranked[c(
     "time_option",
+    "time_zone",
+    "start_datetime",
+    "end_datetime",
     "preferred_count",
     "available_count",
     "unavailable_count",
@@ -342,6 +357,9 @@ format_ranked_table <- function(ranked) {
   )]
   names(formatted) <- c(
     "Time option",
+    "Time zone",
+    "UTC start",
+    "UTC end",
     "Preferred",
     "Available",
     "Unavailable",
@@ -349,6 +367,23 @@ format_ranked_table <- function(ranked) {
     "Score",
     "Required conflicts"
   )
+  formatted
+}
+
+format_responses_table <- function(responses, timezone) {
+  if (is.null(responses) || nrow(responses) == 0) {
+    return(data.frame(Message = "No participant responses yet."))
+  }
+  formatted <- responses[c("name", "email", "organization", "start_datetime", "end_datetime", "availability", "comment")]
+  formatted$local_time <- vapply(seq_len(nrow(formatted)), function(i) {
+    format_readable_option_for_option(responses[i, , drop = FALSE], timezone)
+  }, character(1))
+  formatted$email <- vapply(formatted$email, ui_text, character(1), fallback = "")
+  formatted$organization <- vapply(formatted$organization, ui_text, character(1), fallback = "")
+  formatted$availability <- vapply(formatted$availability, availability_label, character(1))
+  formatted$time_zone <- timezone
+  formatted <- formatted[c("name", "email", "organization", "local_time", "time_zone", "start_datetime", "end_datetime", "availability", "comment")]
+  names(formatted) <- c("Name", "Email", "Organization", "Time option", "Time zone", "UTC start", "UTC end", "Availability", "Comment")
   formatted
 }
 
@@ -360,7 +395,7 @@ decision_stat_ui <- function(label, value, emphasis = FALSE) {
   )
 }
 
-build_ranked_cards <- function(ranked, participant_count) {
+build_ranked_cards <- function(ranked, participant_count, timezone) {
   max_possible <- max(1L, participant_count * 2L)
   rows <- lapply(seq_len(min(5L, nrow(ranked))), function(i) {
     option <- ranked[i, , drop = FALSE]
@@ -371,7 +406,7 @@ build_ranked_cards <- function(ranked, participant_count) {
         class = "ranked-option-main",
         shiny::span(class = "rank-number", paste0("#", i)),
         shiny::div(
-          shiny::h3(option$time_option[[1]]),
+          option_time_ui(option, timezone, heading = "h3"),
           shiny::div(
             class = "ranked-counts",
             availability_badge_ui("preferred", paste(option$preferred_count[[1]], "preferred")),
@@ -395,13 +430,16 @@ build_ranked_cards <- function(ranked, participant_count) {
   shiny::div(class = "ranked-card-list", rows)
 }
 
-build_heatmap_table <- function(participants, options, heatmap) {
+build_heatmap_table <- function(participants, options, heatmap, timezone) {
   header <- shiny::tags$tr(
     shiny::tags$th("Participant"),
     lapply(seq_len(nrow(options)), function(i) {
       shiny::tags$th(
         shiny::span(class = "option-kicker", paste("Option", i)),
-        shiny::span(class = "heatmap-time-label", options$display_label[[i]])
+        shiny::span(
+          class = "heatmap-time-label",
+          format_readable_option_for_option(options[i, , drop = FALSE], timezone)
+        )
       )
     })
   )
@@ -410,7 +448,7 @@ build_heatmap_table <- function(participants, options, heatmap) {
     cells <- lapply(seq_len(nrow(options)), function(j) {
       option <- options[j, , drop = FALSE]
       cell <- heatmap[
-        heatmap$email == participant$email[[1]] &
+        heatmap$participant_id == participant$participant_id[[1]] &
           heatmap$option_id == option$option_id[[1]],
         ,
         drop = FALSE
@@ -425,7 +463,7 @@ build_heatmap_table <- function(participants, options, heatmap) {
     shiny::tags$tr(
       shiny::tags$td(
         shiny::strong(participant$name[[1]]),
-        shiny::span(class = "availability-code", paste(participant$organization[[1]], participant$email[[1]], sep = " | "))
+        shiny::span(class = "availability-code", participant_contact_label(participant))
       ),
       cells
     )
@@ -438,4 +476,16 @@ build_heatmap_table <- function(participants, options, heatmap) {
       shiny::tags$tbody(rows)
     )
   )
+}
+
+participant_contact_label <- function(participant) {
+  values <- c(
+    ui_text(participant$organization[[1]], ""),
+    ui_text(participant$email[[1]], "")
+  )
+  values <- values[nzchar(values)]
+  if (length(values) == 0) {
+    return("Contact not provided")
+  }
+  paste(values, collapse = " | ")
 }

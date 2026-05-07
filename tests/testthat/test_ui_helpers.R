@@ -13,6 +13,12 @@ testthat::test_that("availability helper labels remain stable", {
   testthat::expect_equal(availability_hint("preferred"), "Can attend; works especially well")
 })
 
+testthat::test_that("response availability choices keep submitted values stable", {
+  choices <- response_availability_choices()
+  testthat::expect_equal(unname(choices), c("preferred", "available", "unavailable"))
+  testthat::expect_equal(names(choices), c("Preferred", "Available", "Unavailable"))
+})
+
 testthat::test_that("poll display status includes expired open links", {
   today <- as.Date(format(Sys.time(), tz = "America/Toronto", usetz = FALSE))
   base_poll <- data.frame(
@@ -25,6 +31,15 @@ testthat::test_that("poll display status includes expired open links", {
   )
 
   testthat::expect_equal(poll_display_status(base_poll), "open")
+
+  past_options <- selected_slots_to_options(
+    data.frame(date = as.character(today - 2L), start_time = "09:00", stringsAsFactors = FALSE),
+    60L,
+    "America/Toronto"
+  )
+  no_deadline_poll <- base_poll
+  no_deadline_poll$response_deadline <- ""
+  testthat::expect_equal(poll_display_status(no_deadline_poll, past_options), "expired")
 
   expired_poll <- base_poll
   expired_poll$response_deadline <- as.character(today - 1L)
