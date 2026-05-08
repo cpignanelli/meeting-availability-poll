@@ -54,10 +54,12 @@ server <- function(input, output, session) {
       admin_dashboard_ui("admin")
     } else if (!is.null(params$organizer) && identical(params$organizer, "login")) {
       organizer_portal_ui("organizer")
-    } else if (can_create_poll(params)) {
+    } else if (!is.null(params$create) && can_create_poll(params)) {
       create_poll_ui("create")
-    } else {
+    } else if (!is.null(params$create)) {
       private_creation_page_ui()
+    } else {
+      organizer_portal_ui("organizer")
     }
   })
 

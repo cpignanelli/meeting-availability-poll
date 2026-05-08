@@ -16,23 +16,35 @@ In Posit Connect Cloud, the app should have these environment variables:
 ```text
 SQLITE_DB_PATH=data/app.sqlite
 APP_BASE_URL=https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/
-POLL_CREATION_SECRET=<your-private-creation-secret>
 ORGANIZER_AUTH_SECRET=<a-different-private-random-secret>
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USERNAME=chrispignanelli33@gmail.com
+SMTP_PASSWORD=<your-16-character-google-app-password>
+SMTP_FROM=chrispignanelli33@gmail.com
+SMTP_USE_SSL=true
+ALLOW_DEV_AUTH_CODE_DISPLAY=false
 ```
 
 Use the exact live URL above for `APP_BASE_URL`, including the trailing `/`.
 
-Do not commit the real values of `POLL_CREATION_SECRET` or `ORGANIZER_AUTH_SECRET` to GitHub. If you used an example value from an earlier draft of this guide, change it in Posit Connect Cloud to a new private value before sharing the app.
-
-Your private poll creation URL is:
+Optional legacy fallback:
 
 ```text
-https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/?create=<your-private-creation-secret>
+POLL_CREATION_SECRET=<your-private-creation-secret>
 ```
 
-Share only the generated participant `?respond=<token>` links with colleagues. Keep both the creation URL and generated admin links private.
+Do not commit real secret values such as `ORGANIZER_AUTH_SECRET`, `SMTP_PASSWORD`, or `POLL_CREATION_SECRET` to GitHub. If you used an example value from an earlier draft of this guide, change it in Posit Connect Cloud to a new private value before sharing the app.
 
-You can create multiple live booking polls at the same time. Each poll has its own public response link, private organizer link, and automatic link expiry after the final proposed meeting date. You can also set an earlier response deadline / link expiry date. The organizer portal is available at `?organizer=login` and lists polls tied to the organizer email used at creation. Save private organizer links as a backup.
+Your normal organizer URL is the app root:
+
+```text
+https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/
+```
+
+Sign in with your organizer email and 6-digit code, then use the **Create poll** tab. Share only the generated participant `?respond=<token>` links with colleagues. Keep generated admin links private as backup access.
+
+You can create multiple live booking polls at the same time. Each poll has its own public response link, private organizer link, and automatic link expiry after the final proposed meeting date. You can also set an earlier response deadline / link expiry date. The organizer workspace lists polls tied to the organizer email used at creation. Save private organizer links as a backup.
 
 The app stores proposed times internally in UTC, such as `2026-05-06T13:00:00Z`, but shows readable local meeting options with the selected IANA time zone, such as `Wed, May 6th, 9-10 AM EDT` and `America/Toronto`.
 
@@ -243,13 +255,13 @@ Use this exactly:
 SQLITE_DB_PATH=data/app.sqlite
 ```
 
-Choose a private creation secret, but do not put the real value in GitHub:
+Optional legacy fallback: choose a private creation secret, but do not put the real value in GitHub:
 
 ```text
 POLL_CREATION_SECRET=<your-private-creation-secret>
 ```
 
-This secret keeps random public visitors from creating polls. Do not put this value in GitHub.
+This secret is only for the hidden `?create=` fallback route. The normal workflow creates polls after organizer email-code login.
 
 Add a separate secret for organizer email-code login:
 
@@ -257,15 +269,15 @@ Add a separate secret for organizer email-code login:
 ORGANIZER_AUTH_SECRET=<a-different-private-random-secret>
 ```
 
-To use `?organizer=login` on Connect Cloud, configure SMTP variables:
+Configure SMTP variables so the app root login can send organizer codes:
 
 ```text
-SMTP_HOST=<your-smtp-host>
-SMTP_PORT=587
-SMTP_USERNAME=<your-smtp-username>
-SMTP_PASSWORD=<your-smtp-password>
-SMTP_FROM=<verified-sender@example.org>
-SMTP_USE_SSL=false
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USERNAME=chrispignanelli33@gmail.com
+SMTP_PASSWORD=<your-16-character-google-app-password>
+SMTP_FROM=chrispignanelli33@gmail.com
+SMTP_USE_SSL=true
 ALLOW_DEV_AUTH_CODE_DISPLAY=false
 ```
 
@@ -312,13 +324,13 @@ Use the exact app URL above, including the trailing `/`.
 
 ## Part 10: Create Your First Test Poll
 
-Use the private creation URL:
+Open the app root URL:
 
 ```text
-https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/?create=<your-private-creation-secret>
+https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/
 ```
 
-Replace the secret with whatever value you set in `POLL_CREATION_SECRET`.
+Request a login code for your organizer email, enter the code, then open the **Create poll** tab.
 
 Create a test poll. The app will show two links:
 
@@ -337,7 +349,7 @@ For the free Connect Cloud plan:
 - Use fake or low-risk test data only.
 - SQLite is only for a demo. It is not durable production storage on Connect Cloud.
 - Republish/restart events can remove the SQLite data.
-- Save each private organizer link. Without an organizer login dashboard, that link is how you manage results and reopen/close the response link.
+- Save each private organizer link as backup access. The organizer workspace is the main way to manage results and reopen/close the response link.
 
 For real production use, move to a paid plan and a hosted database such as PostgreSQL, Supabase, Neon, or Azure SQL.
 
@@ -369,9 +381,13 @@ Then republish in Connect Cloud.
 
 Set `APP_BASE_URL` in Connect Cloud environment variables to the public app URL, then restart/republish.
 
-### The app says poll creation is restricted
+### The app root asks for organizer login
 
-That is expected when `POLL_CREATION_SECRET` is set. Add `?create=<your-secret>` to the URL.
+That is expected. The normal workflow now starts with email-code login. Confirm `ORGANIZER_AUTH_SECRET` and SMTP variables are set, then restart/republish.
+
+### The legacy create URL says poll creation is restricted
+
+The hidden fallback `?create=<your-secret>` still requires `POLL_CREATION_SECRET` if you use it.
 
 ### Poll data disappeared
 

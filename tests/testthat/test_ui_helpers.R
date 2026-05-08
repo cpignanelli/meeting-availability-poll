@@ -1,5 +1,5 @@
-testthat::test_that("creation route respects optional creation secret", {
-  testthat::expect_true(can_create_poll(list(), creation_secret = ""))
+testthat::test_that("creation route requires a configured creation secret", {
+  testthat::expect_false(can_create_poll(list(), creation_secret = ""))
   testthat::expect_true(can_create_poll(list(create = "secret-value"), creation_secret = "secret-value"))
   testthat::expect_false(can_create_poll(list(), creation_secret = "secret-value"))
   testthat::expect_false(can_create_poll(list(create = "wrong"), creation_secret = "secret-value"))

@@ -1,8 +1,6 @@
-create_poll_ui <- function(id) {
+create_poll_ui <- function(id, embedded = FALSE, authenticated = FALSE) {
   ns <- shiny::NS(id)
-  shiny::div(
-    class = "app-shell organizer-shell",
-    app_topbar_ui("Create"),
+  content <- shiny::tagList(
     page_header_ui(
       eyebrow = "Organizer setup",
       title = "Create a meeting availability poll",
@@ -27,11 +25,11 @@ create_poll_ui <- function(id) {
           ),
           shiny::div(class = "form-field form-span-2", shiny::textAreaInput(ns("description"), "Description/context", rows = 4, placeholder = "Briefly describe the purpose of the meeting.")),
           shiny::div(class = "form-field", shiny::textInput(ns("organizer_name"), "Organizer name")),
-          shiny::div(class = "form-field", shiny::textInput(ns("organizer_email"), "Organizer email")),
+          shiny::uiOutput(ns("organizer_email_ui")),
           shiny::div(class = "form-field", shiny::selectInput(ns("location_type"), "Location type", choices = c("To be determined", "Virtual", "In person", "Hybrid"))),
           shiny::div(class = "form-field", shiny::textInput(ns("location_details"), "Optional location or virtual meeting details"))
         ),
-        shiny::div(
+        if (!isTRUE(authenticated)) shiny::div(
           class = "remember-organizer-card",
           shiny::div(
             shiny::checkboxInput(ns("remember_organizer"), "Remember organizer name and email on this device", value = FALSE),
@@ -112,13 +110,63 @@ create_poll_ui <- function(id) {
       )
     )
   )
+
+  if (isTRUE(embedded)) {
+    return(shiny::div(class = "organizer-shell embedded-create-shell", content))
+  }
+
+  shiny::div(
+    class = "app-shell organizer-shell",
+    app_topbar_ui("Create"),
+    content
+  )
 }
 
-create_poll_server <- function(id, conn) {
+create_poll_server <- function(id, conn, organizer_email = NULL, on_created = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
+    organizer_email <- organizer_email %||% shiny::reactive("")
     selected_slots <- shiny::reactiveVal(empty_selected_slots())
     week_start <- shiny::reactiveVal(calendar_week_start(Sys.Date()))
     created <- shiny::reactiveVal(NULL)
+    last_locked_organizer_email <- shiny::reactiveVal(NULL)
+
+    locked_organizer_email <- shiny::reactive({
+      value <- organizer_email()
+      if (is.null(value) || !nzchar(value)) {
+        return("")
+      }
+      validate_email(value, field = "Organizer email")
+    })
+
+    active_organizer_email <- function() {
+      locked <- locked_organizer_email()
+      if (nzchar(locked)) {
+        return(locked)
+      }
+      validate_email(input$organizer_email, field = "Organizer email")
+    }
+
+    output$organizer_email_ui <- shiny::renderUI({
+      locked <- tryCatch(locked_organizer_email(), error = function(e) "")
+      if (nzchar(locked)) {
+        return(shiny::div(
+          class = "form-field locked-email-field",
+          shiny::tags$label("Organizer email"),
+          shiny::div(class = "locked-input", locked),
+          shiny::p(class = "helper-text", "This poll will be saved to your signed-in organizer workspace.")
+        ))
+      }
+      shiny::div(class = "form-field", shiny::textInput(session$ns("organizer_email"), "Organizer email"))
+    })
+
+    shiny::observe({
+      locked <- tryCatch(locked_organizer_email(), error = function(e) "")
+      if (!identical(locked, last_locked_organizer_email())) {
+        last_locked_organizer_email(locked)
+        created(NULL)
+        selected_slots(empty_selected_slots())
+      }
+    })
 
     current_duration <- shiny::reactive({
       resolve_duration_minutes(input$duration_choice %||% "60", input$custom_duration_minutes)
@@ -377,7 +425,8 @@ create_poll_server <- function(id, conn) {
       missing <- character()
       if (!nzchar(trimws(input$title %||% ""))) missing <- c(missing, "Meeting title")
       if (!nzchar(trimws(input$organizer_name %||% ""))) missing <- c(missing, "Organizer name")
-      if (!nzchar(trimws(input$organizer_email %||% ""))) missing <- c(missing, "Organizer email")
+      organizer_email_value <- tryCatch(active_organizer_email(), error = function(e) "")
+      if (!nzchar(organizer_email_value)) missing <- c(missing, "Organizer email")
 
       valid_times <- tryCatch({
         timezone <- validate_timezone(input$timezone)
@@ -430,7 +479,7 @@ create_poll_server <- function(id, conn) {
         timezone <- validate_timezone(input$timezone)
         description <- sanitize_text(input$description, max_chars = 2000)
         organizer_name <- sanitize_text(input$organizer_name, max_chars = 160, required = TRUE, field = "Organizer name")
-        organizer_email <- validate_email(input$organizer_email, field = "Organizer email")
+        organizer_email <- active_organizer_email()
         location_type <- sanitize_text(input$location_type, max_chars = 80)
         location_details <- sanitize_text(input$location_details, max_chars = 1000)
 
@@ -465,6 +514,9 @@ create_poll_server <- function(id, conn) {
         response_link <- build_app_link(session, "respond", result$response_token)
         admin_link <- build_app_link(session, "admin", result$admin_token)
         created(list(response_link = response_link, admin_link = admin_link))
+        if (is.function(on_created)) {
+          on_created(result)
+        }
         shiny::showNotification("Poll created. Copy the links below before leaving this page.", type = "message")
       }, error = function(e) {
         shiny::showNotification(safe_error_message(e), type = "error", duration = 8)

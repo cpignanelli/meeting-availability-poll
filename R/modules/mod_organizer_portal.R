@@ -2,7 +2,7 @@ organizer_portal_ui <- function(id) {
   ns <- shiny::NS(id)
   shiny::div(
     class = "app-shell organizer-portal-shell",
-    app_topbar_ui("My polls"),
+    app_topbar_ui("Organizer"),
     shiny::uiOutput(ns("portal_page"))
   )
 }
@@ -48,14 +48,27 @@ organizer_portal_server <- function(id, conn) {
       shiny::tagList(
         page_header_ui(
           eyebrow = "Organizer portal",
-          title = "My polls",
-          subtitle = "Live and expired polls connected to your organizer email.",
+          title = "Organizer workspace",
+          subtitle = "Create polls and manage live, expired, closed, and finalized polls connected to your organizer email.",
           actions = shiny::tagList(
             shiny::actionButton(session$ns("refresh_portal"), "Refresh", class = "btn-outline-secondary"),
             shiny::actionButton(session$ns("sign_out"), "Sign out", class = "btn-outline-secondary")
           )
         ),
-        organizer_poll_tabs_ui(session$ns, polls, conn, session)
+        shiny::div(
+          class = "organizer-workspace-tabs",
+          shiny::tabsetPanel(
+            type = "tabs",
+            shiny::tabPanel(
+              "My polls",
+              organizer_poll_tabs_ui(session$ns, polls, conn, session)
+            ),
+            shiny::tabPanel(
+              "Create poll",
+              create_poll_ui(session$ns("create"), embedded = TRUE, authenticated = TRUE)
+            )
+          )
+        )
       )
     })
 
@@ -125,6 +138,16 @@ organizer_portal_server <- function(id, conn) {
       poll_id = shiny::reactive(selected_poll_id()),
       organizer_email = shiny::reactive(authenticated_email())
     )
+
+    create_poll_server(
+      "create",
+      conn,
+      organizer_email = shiny::reactive(authenticated_email()),
+      on_created = function(result) {
+        selected_poll_id(NULL)
+        refresh()
+      }
+    )
   })
 }
 
@@ -159,8 +182,8 @@ organizer_login_flow_ui <- function(ns, code_requested, pending_email, dev_code)
   shiny::tagList(
     page_header_ui(
       eyebrow = "Organizer portal",
-      title = "My polls",
-      subtitle = "Sign in with your organizer email to view live, expired, closed, and finalized polls."
+      title = "Organizer workspace",
+      subtitle = "Sign in with your organizer email to create polls and manage live, expired, closed, and finalized polls."
     ),
     section_panel_ui(
       "Email login",

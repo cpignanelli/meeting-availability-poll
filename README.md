@@ -10,16 +10,16 @@ Current live pilot URL:
 https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/
 ```
 
-Keep the real `POLL_CREATION_SECRET` value only in Posit Connect Cloud environment variables. Do not commit it to GitHub.
+Keep real secret values only in Posit Connect Cloud environment variables. Do not commit them to GitHub.
 
 ## User workflow
 
-1. The organizer creates a poll with meeting details, time zone, optional location details, a Doodle-style proposed-time grid, and an optional earlier response deadline.
+1. The organizer opens the app root URL, signs in with email and a 6-digit code, then creates a poll with meeting details, time zone, optional location details, a Doodle-style proposed-time grid, and an optional earlier response deadline.
 2. The app generates two links:
    - Public response link: `?respond=<token>`
    - Private organizer link: `?admin=<token>`
 3. Participants submit name, optional email, availability for each option, and optional comments through a Doodle-like calendar response grid.
-4. The organizer reviews a decision-focused dashboard through either the private admin link or the email-code organizer portal at `?organizer=login`.
+4. The organizer reviews a decision-focused dashboard through the signed-in workspace or a private admin link.
 5. The organizer selects the final time, generates copy-ready final email text, optionally downloads an `.ics` file, and closes the poll.
 
 Organizers can create multiple live booking polls at the same time. Each poll has its own public response link and private organizer link. The organizer portal lists polls tied to the organizer email used at creation. Private admin links still work and should still be saved.
@@ -37,7 +37,7 @@ The public participant page is intentionally simple:
 - clear messaging that final meeting confirmation will follow from the organizer;
 - no public access to results, expected participant lists, or organizer-only details.
 
-The organizer dashboard is optimized for deciding quickly: the overview shows the best-ranked option, response progress, response-link status, shareable participant link, ranked options, heatmap, exports, and finalization controls. The `?organizer=login` portal adds a Doodle-like "My polls" view for live, expired, closed, and finalized polls tied to the organizer's email.
+The organizer dashboard is optimized for deciding quickly: the overview shows the best-ranked option, response progress, response-link status, shareable participant link, ranked options, heatmap, exports, and finalization controls. The app root URL opens the organizer workspace with "My polls" and "Create poll" tabs.
 
 ## Date, time, and time zones
 
@@ -129,7 +129,7 @@ Generated links use query-string routing:
 - `?respond=<response_token>` for participants
 - `?admin=<admin_token>` for the organizer
 - `?organizer=login` for the email-code organizer portal
-- `?create=<POLL_CREATION_SECRET>` for poll creation when `POLL_CREATION_SECRET` is set
+- `?create=<POLL_CREATION_SECRET>` as a legacy/dev fallback creation route when `POLL_CREATION_SECRET` is set
 
 For link generation outside RStudio, set `APP_BASE_URL` in `.Renviron`:
 
@@ -141,7 +141,7 @@ ORGANIZER_AUTH_SECRET=replace-with-a-long-random-value
 
 Use `.Renviron.example` as a template. Do not commit `.Renviron`.
 
-If `POLL_CREATION_SECRET` is not set, `/` opens the create-poll page for local development. If `POLL_CREATION_SECRET` is set, `/` shows a locked-page message and poll creation requires the private `?create=` URL.
+The app root URL `/` opens the organizer email-code workspace. Poll creation in the normal workflow requires successful organizer login. The `?create=` URL remains available only as a hidden fallback/dev route.
 
 ## Sharing a live proof of concept
 
@@ -256,7 +256,7 @@ For this app, the Free plan is acceptable for a short public proof of concept wi
 - public access is enabled on Free plans;
 - files written while the app runs are not durable persistent storage;
 - the SQLite proof-of-concept database can disappear when the app restarts or is republished;
-- anyone who can access the app URL can reach the app, so poll creation should use `POLL_CREATION_SECRET`.
+- anyone who can access the app URL can reach the app, so poll creation should require organizer email-code login.
 
 #### Connect Cloud Free GitHub workflow
 
@@ -306,8 +306,14 @@ BookingApp/
 
 ```text
 SQLITE_DB_PATH=data/app.sqlite
-POLL_CREATION_SECRET=<your-private-creation-secret>
 ORGANIZER_AUTH_SECRET=<a-different-private-random-secret>
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USERNAME=chrispignanelli33@gmail.com
+SMTP_PASSWORD=<your-16-character-google-app-password>
+SMTP_FROM=chrispignanelli33@gmail.com
+SMTP_USE_SSL=true
+ALLOW_DEV_AUTH_CODE_DISPLAY=false
 ```
 
 If Connect Cloud shows the final public URL before publish, also set:
@@ -318,24 +324,18 @@ APP_BASE_URL=https://cpignanelli1994-meeting-availability-poll.share.connect.pos
 
 If you do not know the URL yet, publish first, copy the deployed URL, then add `APP_BASE_URL` in the content settings and republish/restart.
 
-To use the organizer portal on Connect Cloud, also configure SMTP:
+Optional legacy fallback:
 
 ```text
-SMTP_HOST=<your-smtp-host>
-SMTP_PORT=587
-SMTP_USERNAME=<your-smtp-username>
-SMTP_PASSWORD=<your-smtp-password>
-SMTP_FROM=<verified-sender@example.org>
-SMTP_USE_SSL=false
-ALLOW_DEV_AUTH_CODE_DISPLAY=false
+POLL_CREATION_SECRET=<your-private-creation-secret>
 ```
 
 For local testing only, you may leave SMTP blank and set `ALLOW_DEV_AUTH_CODE_DISPLAY=true` so the app displays the login code after you request it.
 
-10. Create polls with:
+10. Create polls by opening the app root URL, signing in, and using the **Create poll** tab:
 
 ```text
-https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/?create=<your-private-creation-secret>
+https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/
 ```
 
 11. Share only the generated `?respond=<token>` participant link with your colleague. Keep the generated `?admin=<token>` organizer link private.
@@ -408,7 +408,14 @@ In the deployed content settings:
 
 ```text
 SQLITE_DB_PATH=data/app.sqlite
-POLL_CREATION_SECRET=replace-with-a-long-random-value
+ORGANIZER_AUTH_SECRET=replace-with-a-long-random-value
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USERNAME=chrispignanelli33@gmail.com
+SMTP_PASSWORD=replace-with-google-app-password
+SMTP_FROM=chrispignanelli33@gmail.com
+SMTP_USE_SSL=true
+ALLOW_DEV_AUTH_CODE_DISPLAY=false
 ```
 
 Optional but recommended after the final URL is known:
@@ -422,13 +429,13 @@ APP_BASE_URL=https://connect.example.org/your-app-path/
 
 ### 5. Create a test poll
 
-If `POLL_CREATION_SECRET` is set, the root app URL is locked. Create polls using:
+Open the deployed root URL, request a login code, enter the code, then use the **Create poll** tab:
 
 ```text
-https://connect.example.org/your-app-path/?create=replace-with-a-long-random-value
+https://connect.example.org/your-app-path/
 ```
 
-Create the poll, then share only the generated public response link with your colleague. Keep the generated private organizer link to yourself.
+Create the poll, then share only the generated public response link with your colleague. Keep the generated private organizer link as a backup.
 
 ### 6. Redeploying during the pilot
 

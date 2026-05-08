@@ -1416,6 +1416,31 @@ a {
   margin: 0 auto;
 }
 
+.organizer-workspace-tabs {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.embedded-create-shell {
+  padding: 0;
+}
+
+.embedded-create-shell .page-hero {
+  margin-top: 18px;
+}
+
+.locked-input {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 720;
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+}
+
 .organizer-poll-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
