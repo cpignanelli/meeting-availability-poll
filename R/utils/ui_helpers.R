@@ -106,6 +106,27 @@ detail_grid_ui <- function(items) {
   )
 }
 
+format_duration_label <- function(duration_minutes) {
+  minutes <- suppressWarnings(as.integer(duration_minutes[[1]] %||% NA_integer_))
+  if (is.na(minutes) || minutes <= 0) {
+    return("Not provided")
+  }
+  if (minutes >= 1440L && minutes %% 1440L == 0L) {
+    days <- minutes %/% 1440L
+    return(if (days == 1L) "All day" else paste(days, "days"))
+  }
+  if (minutes < 60L) {
+    return(paste(minutes, if (minutes == 1L) "minute" else "minutes"))
+  }
+  hours <- minutes %/% 60L
+  remainder <- minutes %% 60L
+  hour_label <- paste(hours, if (hours == 1L) "hour" else "hours")
+  if (remainder == 0L) {
+    return(hour_label)
+  }
+  paste(hour_label, remainder, if (remainder == 1L) "minute" else "minutes")
+}
+
 status_pill_ui <- function(status, label = NULL) {
   status <- tolower(ui_text(status, "unknown"))
   label <- label %||% paste("Status:", poll_display_status_label(status))
@@ -246,6 +267,7 @@ copy_field_ui <- function(input_id, label, value, helper = NULL, sensitive = FAL
 
 availability_short_label <- function(value) {
   labels <- c(
+    pending = "Pending",
     preferred = "Preferred",
     available = "Available",
     unavailable = "Unavailable",
@@ -256,6 +278,7 @@ availability_short_label <- function(value) {
 
 availability_hint <- function(value) {
   hints <- c(
+    pending = "Not answered yet",
     preferred = "Can attend; works especially well",
     available = "Can attend",
     unavailable = "Cannot attend",
@@ -287,6 +310,36 @@ response_availability_choices <- function() {
     "Preferred" = "preferred",
     "Available" = "available",
     "Unavailable" = "unavailable"
+  )
+}
+
+response_availability_cycle <- function() {
+  c("pending", "available", "preferred", "unavailable")
+}
+
+availability_icon <- function(value) {
+  icons <- c(
+    pending = "○",
+    preferred = "★",
+    available = "✓",
+    unavailable = "×",
+    missing = "○"
+  )
+  unname(icons[as.character(value)] %||% "○")
+}
+
+availability_cycle_button_ui <- function(input_id, label = "Pending") {
+  shiny::tags$button(
+    type = "button",
+    class = "availability-cycle-button availability-state-pending",
+    `data-availability-cycle` = "true",
+    `data-availability-input` = input_id,
+    `data-availability-value` = "",
+    `data-availability-state` = "pending",
+    `aria-label` = paste(label, "availability is pending. Activate to change response."),
+    shiny::span(class = "availability-cycle-icon", availability_icon("pending")),
+    shiny::span(class = "availability-cycle-label", "Pending"),
+    shiny::span(class = "availability-cycle-hint", availability_hint("pending"))
   )
 }
 
@@ -358,7 +411,7 @@ poll_detail_items <- function(poll, options = NULL) {
 
   list(
     list(label = "Organizer", value = poll$organizer_name[[1]]),
-    list(label = "Duration", value = paste(poll$duration_minutes[[1]], "minutes")),
+    list(label = "Duration", value = format_duration_label(poll$duration_minutes[[1]])),
     list(label = "Time zone", value = timezone_with_offset_label(poll$timezone[[1]], reference_utc)),
     list(label = "Link expiry", value = format_deadline_label(poll_effective_deadline(poll, options))),
     list(label = "Location", value = location_value)
@@ -382,7 +435,7 @@ response_poll_detail_items <- function(poll, options = NULL) {
 
   list(
     list(label = "Organizer", value = poll$organizer_name[[1]]),
-    list(label = "Duration", value = paste(poll$duration_minutes[[1]], "minutes")),
+    list(label = "Duration", value = format_duration_label(poll$duration_minutes[[1]])),
     list(label = "Link expiry", value = format_deadline_label(poll_effective_deadline(poll, options))),
     list(label = "Location", value = location_value),
     list(label = "Times shown", value = times_shown)

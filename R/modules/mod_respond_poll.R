@@ -194,31 +194,6 @@ respond_poll_server <- function(id, conn, token) {
   })
 }
 
-build_response_option_ui <- function(ns, option, index, total, timezone) {
-  shiny::div(
-    class = "response-matrix-row",
-    shiny::div(
-      class = "response-time-cell",
-      shiny::span(class = "option-kicker", paste("Option", index, "of", total)),
-      option_time_ui(option, timezone, show_context = FALSE)
-    ),
-    shiny::div(
-      class = "availability-vote response-choice-set",
-      shiny::radioButtons(
-        ns(paste0("availability_", option$option_id[[1]])),
-        "Choose availability",
-        choices = response_availability_choices(),
-        selected = character(0),
-        inline = TRUE
-      )
-    )
-  )
-}
-
-build_response_matrix_ui <- function(ns, options, timezone) {
-  build_response_calendar_ui(ns, options, timezone)
-}
-
 build_response_calendar_ui <- function(ns, options, timezone) {
   calendar <- response_calendar_data(options, timezone)
   if (nrow(calendar) == 0) {
@@ -238,15 +213,30 @@ build_response_calendar_ui <- function(ns, options, timezone) {
 
   shiny::div(
     class = "response-calendar",
+    response_board_legend_ui(),
     shiny::div(
       class = "response-calendar-note",
-      shiny::strong("Select one response for each proposed time."),
+      shiny::strong("Click each cell to choose your response."),
       shiny::span(paste("Times shown in", unique(calendar$timezone_label)[[1]]))
     ),
     do.call(
       shiny::tabsetPanel,
       c(list(type = "pills", selected = default_week, id = ns("response_week_tabs")), panels)
     )
+  )
+}
+
+response_board_legend_ui <- function() {
+  states <- response_availability_cycle()
+  shiny::div(
+    class = "response-board-legend",
+    lapply(states, function(state) {
+      shiny::span(
+        class = paste("response-board-legend-item", paste0("availability-state-", state)),
+        shiny::span(class = "availability-cycle-icon", availability_icon(state)),
+        shiny::span(availability_short_label(state))
+      )
+    })
   )
 }
 
@@ -296,64 +286,76 @@ default_response_week <- function(calendar) {
 }
 
 response_week_calendar_ui <- function(ns, week_options, timezone) {
-  dates <- unique(week_options$local_date)
-  times <- unique(week_options$local_time)
-  times <- times[order(ifelse(times == "all_day", -1, match(times, sort(times))))]
-
+  week_options <- week_options[order(week_options$start_datetime), , drop = FALSE]
   header <- shiny::tags$tr(
-    shiny::tags$th("Time"),
-    lapply(dates, function(date_value) {
-      shiny::tags$th(
-        shiny::span(class = "calendar-day-name", format(date_value, "%a")),
-        shiny::strong(paste0(format(date_value, "%b "), as.integer(format(date_value, "%d"))))
-      )
+    shiny::tags$th(class = "response-board-participant-header", "Participant"),
+    lapply(seq_len(nrow(week_options)), function(i) {
+      response_board_option_header_ui(week_options[i, , drop = FALSE], timezone)
     })
   )
-
-  rows <- lapply(times, function(time_value) {
-    time_label <- week_options$local_time_label[week_options$local_time == time_value][[1]]
-    cells <- lapply(dates, function(date_value) {
-      option <- week_options[
-        week_options$local_date == date_value & week_options$local_time == time_value,
-        ,
-        drop = FALSE
-      ]
-      if (nrow(option) == 0) {
-        return(shiny::tags$td(class = "response-calendar-empty", ""))
-      }
-      shiny::tags$td(
-        class = "response-calendar-option-cell",
-        shiny::div(
-          class = "response-calendar-option",
-          shiny::span(class = "response-calendar-option-time", format_readable_option_for_option(option, timezone)),
-          shiny::div(
-            class = "availability-vote response-calendar-choice-set",
-            shiny::radioButtons(
-              ns(paste0("availability_", option$option_id[[1]])),
-              "Choose availability",
-              choices = response_availability_choices(),
-              selected = character(0),
-              inline = TRUE
-            )
-          )
-        )
-      )
-    })
-    shiny::tags$tr(
-      shiny::tags$th(class = "response-calendar-time", time_label),
-      cells
+  response_cells <- lapply(seq_len(nrow(week_options)), function(i) {
+    option <- week_options[i, , drop = FALSE]
+    option_label <- paste(option$local_date_label[[1]], response_board_time_label(option, timezone))
+    shiny::tags$td(
+      class = "response-board-answer-cell",
+      availability_cycle_button_ui(ns(paste0("availability_", option$option_id[[1]])), option_label)
     )
   })
 
   shiny::div(
     class = "response-calendar-scroll",
     shiny::tags$table(
-      class = "response-calendar-table",
+      class = "response-calendar-table response-board-table",
       shiny::tags$thead(header),
-      shiny::tags$tbody(rows)
+      shiny::tags$tbody(
+        shiny::tags$tr(
+          shiny::tags$th(
+            class = "response-board-participant-cell",
+            shiny::span(class = "participant-avatar-mini", "Y"),
+            shiny::div(
+              shiny::strong("You"),
+              shiny::span("Your response")
+            )
+          ),
+          response_cells
+        )
+      )
     ),
     response_mobile_date_cards_ui(ns, week_options, timezone)
   )
+}
+
+response_board_option_header_ui <- function(option, timezone) {
+  date_value <- as.Date(option$local_date[[1]])
+  shiny::tags$th(
+    class = "response-board-option-header",
+    shiny::span(class = "response-board-favorite", "☆"),
+    shiny::span(class = "response-board-date", format_readable_date(date_value, include_year = FALSE, ordinal = FALSE)),
+    shiny::span(class = "response-board-time", response_board_time_label(option, timezone)),
+    shiny::span(class = "response-board-duration", response_board_duration_label(option))
+  )
+}
+
+response_board_time_label <- function(option, timezone) {
+  if (isTRUE(response_board_is_all_day(option))) {
+    return("All day")
+  }
+  format_readable_time_range(option$start_datetime[[1]], option$end_datetime[[1]], timezone)
+}
+
+response_board_duration_label <- function(option) {
+  format_duration_label(response_board_duration_minutes(option))
+}
+
+response_board_duration_minutes <- function(option) {
+  start <- parse_utc_timestamp(option$start_datetime[[1]])
+  end <- parse_utc_timestamp(option$end_datetime[[1]])
+  as.integer(round(as.numeric(difftime(end, start, units = "mins"))))
+}
+
+response_board_is_all_day <- function(option) {
+  response_board_duration_minutes(option) >= 1440L ||
+    is_all_day_option_label(option$display_label[[1]] %||% "")
 }
 
 response_mobile_date_cards_ui <- function(ns, week_options, timezone) {
@@ -368,30 +370,18 @@ response_mobile_date_cards_ui <- function(ns, week_options, timezone) {
         option <- day_options[i, , drop = FALSE]
         shiny::div(
           class = "response-date-option",
-          shiny::strong(format_readable_option_for_option(option, timezone)),
           shiny::div(
-            class = "availability-vote response-calendar-choice-set",
-            response_mobile_choice_buttons(ns, option$option_id[[1]])
+            class = "response-date-option-main",
+            shiny::strong(response_board_time_label(option, timezone)),
+            shiny::span(response_board_duration_label(option))
+          ),
+          availability_cycle_button_ui(
+            ns(paste0("availability_", option$option_id[[1]])),
+            paste(option$local_date_label[[1]], response_board_time_label(option, timezone))
           )
         )
       })
     )
   })
   shiny::div(class = "response-mobile-date-cards", cards)
-}
-
-response_mobile_choice_buttons <- function(ns, option_id) {
-  input_id <- ns(paste0("availability_", option_id))
-  choices <- response_availability_choices()
-  buttons <- lapply(names(choices), function(label) {
-    value <- choices[[label]]
-    shiny::tags$button(
-      type = "button",
-      class = "mobile-availability-button",
-      `data-availability-input` = input_id,
-      `data-availability-value` = value,
-      label
-    )
-  })
-  shiny::div(class = "mobile-availability-buttons", buttons)
 }

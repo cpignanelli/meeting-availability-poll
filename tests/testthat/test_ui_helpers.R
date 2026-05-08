@@ -17,6 +17,16 @@ testthat::test_that("response availability choices keep submitted values stable"
   choices <- response_availability_choices()
   testthat::expect_equal(unname(choices), c("preferred", "available", "unavailable"))
   testthat::expect_equal(names(choices), c("Preferred", "Available", "Unavailable"))
+  testthat::expect_equal(response_availability_cycle(), c("pending", "available", "preferred", "unavailable"))
+  testthat::expect_equal(availability_icon("preferred"), "★")
+})
+
+testthat::test_that("duration labels use human-readable units", {
+  testthat::expect_equal(format_duration_label(15), "15 minutes")
+  testthat::expect_equal(format_duration_label(60), "1 hour")
+  testthat::expect_equal(format_duration_label(90), "1 hour 30 minutes")
+  testthat::expect_equal(format_duration_label(120), "2 hours")
+  testthat::expect_equal(format_duration_label(1440), "All day")
 })
 
 testthat::test_that("poll display status includes expired open links", {

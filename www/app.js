@@ -8,6 +8,31 @@
   var pendingCalendarChanges = new Map();
   var pendingCalendarFlushTimer = null;
   var pendingCalendarMaxTimer = null;
+  var availabilityCycleStates = ["pending", "available", "preferred", "unavailable"];
+  var availabilityCycleValues = {
+    pending: "",
+    available: "available",
+    preferred: "preferred",
+    unavailable: "unavailable"
+  };
+  var availabilityCycleLabels = {
+    pending: "Pending",
+    available: "Available",
+    preferred: "Preferred",
+    unavailable: "Unavailable"
+  };
+  var availabilityCycleHints = {
+    pending: "Not answered yet",
+    available: "I can attend",
+    preferred: "Best for me",
+    unavailable: "I cannot attend"
+  };
+  var availabilityCycleIcons = {
+    pending: "○",
+    available: "✓",
+    preferred: "★",
+    unavailable: "×"
+  };
 
   function copyTextFromTarget(targetId, button) {
     var target = document.getElementById(targetId);
@@ -254,6 +279,52 @@
     });
   }
 
+  function normalizeAvailabilityState(state) {
+    return availabilityCycleStates.indexOf(state) >= 0 ? state : "pending";
+  }
+
+  function setAvailabilityCycleState(button, state) {
+    if (!button) {
+      return;
+    }
+    state = normalizeAvailabilityState(state);
+    availabilityCycleStates.forEach(function (cycleState) {
+      button.classList.remove("availability-state-" + cycleState);
+    });
+    button.classList.add("availability-state-" + state);
+    button.setAttribute("data-availability-state", state);
+    button.setAttribute("data-availability-value", availabilityCycleValues[state]);
+    button.setAttribute("aria-pressed", state === "pending" ? "false" : "true");
+    button.setAttribute("aria-label", availabilityCycleLabels[state] + ". Activate to change response.");
+
+    var icon = button.querySelector(".availability-cycle-icon");
+    var label = button.querySelector(".availability-cycle-label");
+    var hint = button.querySelector(".availability-cycle-hint");
+    if (icon) {
+      icon.textContent = availabilityCycleIcons[state];
+    }
+    if (label) {
+      label.textContent = availabilityCycleLabels[state];
+    }
+    if (hint) {
+      hint.textContent = availabilityCycleHints[state];
+    }
+  }
+
+  function cycleAvailabilityButton(button) {
+    var currentState = normalizeAvailabilityState(button.getAttribute("data-availability-state"));
+    var currentIndex = availabilityCycleStates.indexOf(currentState);
+    var nextState = availabilityCycleStates[(currentIndex + 1) % availabilityCycleStates.length];
+    setAvailabilityCycleState(button, nextState);
+    if (window.Shiny) {
+      window.Shiny.setInputValue(
+        button.getAttribute("data-availability-input"),
+        availabilityCycleValues[nextState],
+        { priority: "event" }
+      );
+    }
+  }
+
   function registerShinyHandlers() {
     if (!window.Shiny || shinyHandlersRegistered) {
       return;
@@ -339,22 +410,10 @@
       return;
     }
 
-    var availabilityButton = event.target.closest("[data-availability-input]");
-    if (availabilityButton) {
+    var cycleButton = event.target.closest("[data-availability-cycle]");
+    if (cycleButton) {
       event.preventDefault();
-      var group = availabilityButton.closest(".mobile-availability-buttons");
-      if (group) {
-        group.querySelectorAll("[data-availability-input]").forEach(function (button) {
-          button.classList.toggle("mobile-availability-button-selected", button === availabilityButton);
-        });
-      }
-      if (window.Shiny) {
-        window.Shiny.setInputValue(
-          availabilityButton.getAttribute("data-availability-input"),
-          availabilityButton.getAttribute("data-availability-value"),
-          { priority: "event" }
-        );
-      }
+      cycleAvailabilityButton(cycleButton);
       return;
     }
 

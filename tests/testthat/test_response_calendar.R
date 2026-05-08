@@ -38,7 +38,31 @@ testthat::test_that("response calendar renders one input per proposed option", {
   html <- as.character(build_response_calendar_ui(shiny::NS("respond"), options, timezone))
 
   testthat::expect_true(grepl("respond-availability_101", html, fixed = TRUE))
+  testthat::expect_true(grepl("data-availability-cycle", html, fixed = TRUE))
+  testthat::expect_true(grepl("Pending", html, fixed = TRUE))
   testthat::expect_true(grepl("Preferred", html, fixed = TRUE))
   testthat::expect_true(grepl("Available", html, fixed = TRUE))
   testthat::expect_true(grepl("Unavailable", html, fixed = TRUE))
+})
+
+testthat::test_that("response board helpers summarize timed and all-day options", {
+  timezone <- "America/Toronto"
+  start_one <- parse_local_datetime(Sys.Date() + 3L, "09:00", timezone)
+  timed_option <- data.frame(
+    option_id = 101L,
+    poll_id = 1L,
+    start_datetime = as_utc_string(start_one),
+    end_datetime = as_utc_string(add_minutes(start_one, 90)),
+    display_label = "Option 1",
+    option_order = 1L,
+    stringsAsFactors = FALSE
+  )
+  all_day_option <- timed_option
+  all_day_option$end_datetime <- as_utc_string(add_minutes(start_one, 1440))
+  all_day_option$display_label <- "All day option"
+
+  testthat::expect_match(response_board_time_label(timed_option, timezone), "9")
+  testthat::expect_equal(response_board_duration_label(timed_option), "1 hour 30 minutes")
+  testthat::expect_equal(response_board_time_label(all_day_option, timezone), "All day")
+  testthat::expect_equal(response_board_duration_label(all_day_option), "All day")
 })

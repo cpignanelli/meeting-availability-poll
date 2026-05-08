@@ -18,7 +18,7 @@ Keep real secret values only in Posit Connect Cloud environment variables. Do no
 2. The app generates two links:
    - Public response link: `?respond=<token>`
    - Private organizer link: `?admin=<token>`
-3. Participants submit name, optional email, availability for each option, and optional comments through a Doodle-like calendar response grid.
+3. Participants submit name, optional email, availability for each option, and optional comments through a compact Doodle-like availability board.
 4. The organizer reviews a decision-focused dashboard through the signed-in workspace or a private admin link.
 5. The organizer selects the final time, generates copy-ready final email text, optionally downloads an `.ics` file, and closes the poll.
 
