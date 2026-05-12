@@ -79,6 +79,16 @@ organizer_portal_server <- function(id, conn) {
       tryCatch({
         app_main_owner_email()
         email <- validate_email(input$organizer_email, field = "Organizer email")
+        role <- get_owner_role(conn, email)
+        if (!role %in% c("main_owner", "owner")) {
+          pending_email("")
+          code_requested(FALSE)
+          dev_code("")
+          sign_in_notice(access_request_guidance_message(role))
+          shiny::updateTextInput(session, "request_email", value = email)
+          return(shiny::showNotification("Use the request organizer access section to continue.", type = "warning", duration = 8))
+        }
+
         login <- create_organizer_login_code(conn, email)
         delivery <- send_organizer_magic_code_email(email, login$code)
         pending_email(email)
@@ -265,11 +275,11 @@ organizer_portal_server <- function(id, conn) {
 access_request_guidance_message <- function(role) {
   switch(
     role,
-    pending = "Your organizer access request is still pending. The main owner must approve it before you can create or manage polls.",
-    denied = "This email is not currently approved for organizer access. You can submit a new access request below.",
-    revoked = "Organizer access for this email has been revoked. Contact the main owner if access should be restored.",
-    none = "This email is not approved for organizer access. Submit a request below if you need to create or manage polls.",
-    "This email is not approved for organizer access. Submit a request below if you need to create or manage polls."
+    pending = "A request for this email is still pending. The main owner must approve it before organizer sign-in is available.",
+    denied = "Organizer sign-in is not currently available for this email. Submit a new access request below if access should be reviewed again.",
+    revoked = "Organizer sign-in is not currently available for this email. Contact the main owner if access should be restored.",
+    none = "Organizer sign-in is not currently available for this email. Complete the access request section below to ask the main owner for access.",
+    "Organizer sign-in is not currently available for this email. Complete the access request section below to ask the main owner for access."
   )
 }
 
