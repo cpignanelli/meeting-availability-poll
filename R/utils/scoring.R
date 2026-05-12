@@ -3,10 +3,54 @@ score_value <- function(availability) {
   ifelse(availability == "preferred", 2L, ifelse(availability == "available", 1L, 0L))
 }
 
+empty_ranked_options <- function() {
+  data.frame(
+    option_id = integer(),
+    start_datetime = character(),
+    end_datetime = character(),
+    time_option = character(),
+    time_zone = character(),
+    preferred_count = integer(),
+    available_count = integer(),
+    unavailable_count = integer(),
+    missing_count = integer(),
+    availability_score = integer(),
+    required_attendee_conflicts = integer(),
+    stringsAsFactors = FALSE
+  )
+}
+
+empty_availability_matrix <- function() {
+  data.frame(
+    participant_id = integer(),
+    participant = character(),
+    email = character(),
+    organization = character(),
+    option_id = integer(),
+    time_option = character(),
+    availability = character(),
+    availability_label = character(),
+    stringsAsFactors = FALSE
+  )
+}
+
 rank_time_options <- function(options, responses, participants = data.frame(), expected = data.frame(), timezone = NULL) {
+  options <- options %||% data.frame()
+  responses <- responses %||% data.frame()
+  participants <- participants %||% data.frame()
+  expected <- expected %||% data.frame()
+
   if (nrow(options) == 0) {
-    return(data.frame())
+    return(empty_ranked_options())
   }
+
+  if (!"option_id" %in% names(responses)) responses$option_id <- integer(nrow(responses))
+  if (!"participant_id" %in% names(responses)) responses$participant_id <- integer(nrow(responses))
+  if (!"availability" %in% names(responses)) responses$availability <- character(nrow(responses))
+  if (!"participant_id" %in% names(participants)) participants$participant_id <- integer(nrow(participants))
+  if (!"email" %in% names(participants)) participants$email <- character(nrow(participants))
+  if (!"email" %in% names(expected)) expected$email <- character(nrow(expected))
+  if (!"is_required" %in% names(expected)) expected$is_required <- integer(nrow(expected))
 
   ranked <- data.frame(
     option_id = options$option_id,
@@ -41,12 +85,15 @@ rank_time_options <- function(options, responses, participants = data.frame(), e
   }
 
   if (nrow(expected) > 0 && nrow(participants) > 0) {
-    required_emails <- normalize_email(expected$email[expected$is_required == 1])
+    required_rows <- expected[expected$is_required == 1, , drop = FALSE]
+    required_emails <- normalize_email_vector(required_rows$email)
+    required_emails <- required_emails[nzchar(required_emails)]
+    participant_emails <- normalize_email_vector(participants$email)
     for (i in seq_len(nrow(options))) {
       option_id <- options$option_id[[i]]
       conflicts <- 0L
       for (email in required_emails) {
-        participant <- participants[normalize_email(participants$email) == email, , drop = FALSE]
+        participant <- participants[participant_emails == email, , drop = FALSE]
         if (nrow(participant) == 0) {
           conflicts <- conflicts + 1L
           next
@@ -77,9 +124,19 @@ rank_time_options <- function(options, responses, participants = data.frame(), e
 }
 
 build_availability_matrix <- function(options, responses, participants, timezone = NULL) {
+  options <- options %||% data.frame()
+  responses <- responses %||% data.frame()
+  participants <- participants %||% data.frame()
+
   if (nrow(participants) == 0 || nrow(options) == 0) {
-    return(data.frame())
+    return(empty_availability_matrix())
   }
+
+  if (!"participant_id" %in% names(responses)) responses$participant_id <- integer(nrow(responses))
+  if (!"option_id" %in% names(responses)) responses$option_id <- integer(nrow(responses))
+  if (!"availability" %in% names(responses)) responses$availability <- character(nrow(responses))
+  if (!"email" %in% names(participants)) participants$email <- character(nrow(participants))
+  if (!"organization" %in% names(participants)) participants$organization <- character(nrow(participants))
 
   rows <- list()
   counter <- 1L
@@ -120,11 +177,17 @@ build_availability_matrix <- function(options, responses, participants, timezone
 }
 
 find_missing_expected_participants <- function(expected, participants) {
+  expected <- expected %||% data.frame()
+  participants <- participants %||% data.frame()
   if (nrow(expected) == 0) {
     return(data.frame())
   }
-  submitted <- normalize_email(participants$email %||% character())
-  missing <- expected[!normalize_email(expected$email) %in% submitted, , drop = FALSE]
+  if (!"email" %in% names(expected)) expected$email <- character(nrow(expected))
+  if (!"email" %in% names(participants)) participants$email <- character(nrow(participants))
+  submitted <- normalize_email_vector(participants$email)
+  submitted <- submitted[nzchar(submitted)]
+  expected_emails <- normalize_email_vector(expected$email)
+  missing <- expected[!expected_emails %in% submitted, , drop = FALSE]
   rownames(missing) <- NULL
   missing
 }

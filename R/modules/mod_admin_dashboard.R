@@ -32,95 +32,146 @@ admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organ
       tryCatch(get_poll_for_organizer(conn, current_poll_id, current_email), error = function(e) NULL)
     })
 
-    dashboard_data <- shiny::reactive({
+    dashboard_result <- shiny::reactive({
       refresh_counter()
       current_poll <- poll()
       if (is.null(current_poll)) {
+        return(list(data = NULL, error = FALSE, message = "", poll = NULL))
+      }
+      poll_id_value <- current_poll$poll_id[[1]]
+      tryCatch(
+        list(
+          data = get_poll_dashboard_data(conn, poll_id_value),
+          error = FALSE,
+          message = "",
+          poll = current_poll
+        ),
+        error = function(e) {
+          warning(
+            sprintf("Dashboard load failed for poll_id=%s: %s", poll_id_value, conditionMessage(e)),
+            call. = FALSE
+          )
+          list(
+            data = NULL,
+            error = TRUE,
+            message = "We could not load this poll dashboard. The poll data is still stored; try refreshing, then check the app logs if this continues.",
+            poll = current_poll
+          )
+        }
+      )
+    })
+
+    dashboard_data <- shiny::reactive({
+      result <- dashboard_result()
+      if (isTRUE(result$error)) {
         return(NULL)
       }
-      get_poll_dashboard_data(conn, current_poll$poll_id[[1]])
+      result$data
     })
 
     output$admin_page <- shiny::renderUI({
-      data <- dashboard_data()
+      result <- dashboard_result()
+      if (isTRUE(result$error)) {
+        return(dashboard_load_error_ui(result$poll, result$message))
+      }
+      data <- result$data
       if (is.null(data)) {
         return(empty_state_ui("Invalid organizer link", "This private organizer link is missing or invalid."))
       }
 
-      shiny::tagList(
-        page_header_ui(
-          eyebrow = "Organizer dashboard",
-          title = data$poll$title[[1]],
-          subtitle = data$poll$description[[1]],
-          meta = shiny::tagList(
-            status_pill_ui(poll_display_status(data$poll, data$options)),
-            detail_grid_ui(poll_detail_items(data$poll, data$options))
-          )
-        ),
-        shiny::div(
-          class = "dashboard-tabs",
-          shiny::tabsetPanel(
-            type = "tabs",
-            shiny::tabPanel(
-              "Overview",
-              shiny::div(
-                class = "dashboard-lead-grid",
-                shiny::uiOutput(session$ns("decision_card")),
-                shiny::uiOutput(session$ns("response_link_panel"))
-              ),
-              shiny::uiOutput(session$ns("summary_cards")),
-              section_panel_ui(
-                "Ranked options",
-                "Scores use: preferred = 2, available = 1, unavailable or missing = 0.",
-                shiny::uiOutput(session$ns("ranked_cards")),
-                shiny::details(
-                  class = "details-panel",
-                  shiny::tags$summary("Show detailed ranked table"),
-                  DT::DTOutput(session$ns("ranked_table"))
+      tryCatch(
+        shiny::tagList(
+          page_header_ui(
+            eyebrow = "Organizer dashboard",
+            title = data$poll$title[[1]],
+            subtitle = data$poll$description[[1]],
+            meta = shiny::tagList(
+              status_pill_ui(poll_display_status(data$poll, data$options)),
+              detail_grid_ui(poll_detail_items(data$poll, data$options))
+            )
+          ),
+          shiny::div(
+            class = "dashboard-tabs",
+            shiny::tabsetPanel(
+              type = "tabs",
+              shiny::tabPanel(
+                "Overview",
+                shiny::uiOutput(session$ns("summary_cards")),
+                shiny::div(
+                  class = "dashboard-lead-grid",
+                  shiny::uiOutput(session$ns("decision_card")),
+                  shiny::uiOutput(session$ns("response_link_panel"))
                 ),
-                shiny::downloadButton(session$ns("download_ranked"), "Download ranked options", class = "btn-outline-secondary")
-              )
-            ),
-            shiny::tabPanel(
-              "Availability",
-              section_panel_ui(
-                "Availability heatmap",
-                "Each cell includes text and color so availability is readable without relying on color alone.",
-                availability_legend_ui(),
-                shiny::uiOutput(session$ns("heatmap"))
+                section_panel_ui(
+                  "Ranked options",
+                  "Scores use: preferred = 2, available = 1, unavailable or missing = 0.",
+                  shiny::uiOutput(session$ns("ranked_cards")),
+                  shiny::details(
+                    class = "details-panel",
+                    shiny::tags$summary("Show detailed ranked table"),
+                    DT::DTOutput(session$ns("ranked_table"))
+                  ),
+                  shiny::downloadButton(session$ns("download_ranked"), "Download ranked options", class = "btn-outline-secondary")
+                )
               ),
-              section_panel_ui(
-                "Missing responses",
-                NULL,
-                shiny::uiOutput(session$ns("missing_expected"))
+              shiny::tabPanel(
+                "Availability",
+                section_panel_ui(
+                  "Availability heatmap",
+                  "Each cell includes text and color so availability is readable without relying on color alone.",
+                  availability_legend_ui(),
+                  shiny::uiOutput(session$ns("heatmap"))
+                ),
+                section_panel_ui(
+                  "Missing responses",
+                  NULL,
+                  shiny::uiOutput(session$ns("missing_expected"))
+                )
+              ),
+              shiny::tabPanel(
+                "Responses",
+                section_panel_ui(
+                  "Response details",
+                  "Detailed response data is visible only from this private organizer link.",
+                  DT::DTOutput(session$ns("responses_table")),
+                  shiny::downloadButton(session$ns("download_responses"), "Download response details", class = "btn-outline-secondary")
+                )
+              ),
+              shiny::tabPanel(
+                "Finalize",
+                finalize_poll_ui(session$ns("finalize"))
               )
-            ),
-            shiny::tabPanel(
-              "Responses",
-              section_panel_ui(
-                "Response details",
-                "Detailed response data is visible only from this private organizer link.",
-                DT::DTOutput(session$ns("responses_table")),
-                shiny::downloadButton(session$ns("download_responses"), "Download response details", class = "btn-outline-secondary")
-              )
-            ),
-            shiny::tabPanel(
-              "Finalize",
-              finalize_poll_ui(session$ns("finalize"))
             )
           )
-        )
+        ),
+        error = function(e) {
+          warning(
+            sprintf("Dashboard UI failed for poll_id=%s: %s", data$poll$poll_id[[1]], conditionMessage(e)),
+            call. = FALSE
+          )
+          dashboard_load_error_ui(
+            data$poll,
+            "We could not prepare the dashboard view. Try refreshing, then check the app logs if this continues."
+          )
+        }
       )
     })
 
     output$decision_card <- shiny::renderUI({
       data <- dashboard_data()
       if (is.null(data)) return(NULL)
-      if (nrow(data$ranked) == 0 || nrow(data$participants) == 0) {
+      if (nrow(data$options) == 0) {
         return(section_panel_ui(
           "Best current option",
           NULL,
-          empty_state_ui("No responses yet", "The recommended time will appear after participants submit availability.")
+          empty_state_ui("No proposed times", "This poll does not have proposed time slots to rank.")
+        ))
+      }
+      if (nrow(data$participants) == 0) {
+        return(section_panel_ui(
+          "Best current option",
+          NULL,
+          empty_state_ui("Waiting for responses", "The recommended time will appear after participants submit availability.")
         ))
       }
 
@@ -195,15 +246,17 @@ admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organ
 
     output$responses_table <- DT::renderDT({
       data <- dashboard_data()
-      if (is.null(data) || nrow(data$responses) == 0) {
-        return(data.frame(Message = "No participant responses yet."))
-      }
+      if (is.null(data)) return(empty_responses_table())
       format_responses_table(data$responses, data$poll$timezone[[1]])
     }, rownames = FALSE, escape = TRUE, options = list(pageLength = 10, scrollX = TRUE))
 
     output$heatmap <- shiny::renderUI({
       data <- dashboard_data()
-      if (is.null(data) || nrow(data$participants) == 0) {
+      if (is.null(data)) return(NULL)
+      if (nrow(data$options) == 0) {
+        return(empty_state_ui("No proposed times", "This poll does not have proposed time slots to display."))
+      }
+      if (nrow(data$participants) == 0) {
         return(empty_state_ui("No responses yet", "The heatmap will appear after participants submit availability."))
       }
       build_heatmap_table(data$participants, data$options, data$heatmap, data$poll$timezone[[1]])
@@ -225,7 +278,14 @@ admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organ
 
     output$missing_expected_table <- DT::renderDT({
       data <- dashboard_data()
-      if (is.null(data)) return(data.frame())
+      if (is.null(data) || is.null(data$missing_expected) || nrow(data$missing_expected) == 0) {
+        return(empty_missing_expected_table())
+      }
+      required_columns <- c("name", "email", "organization", "is_required")
+      missing_columns <- setdiff(required_columns, names(data$missing_expected))
+      if (length(missing_columns) > 0) {
+        stop("Expected participant data is missing required columns.", call. = FALSE)
+      }
       missing <- data$missing_expected[c("name", "email", "organization", "is_required")]
       missing$is_required <- ifelse(missing$is_required == 1L, "Required", "Optional")
       names(missing) <- c("Name", "Email", "Organization", "Required")
@@ -236,6 +296,9 @@ admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organ
       filename = function() "ranked-time-slots.csv",
       content = function(file) {
         data <- dashboard_data()
+        if (is.null(data)) {
+          stop("Dashboard data is not available.", call. = FALSE)
+        }
         utils::write.csv(format_ranked_table(data$ranked), file, row.names = FALSE, na = "")
       }
     )
@@ -244,6 +307,9 @@ admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organ
       filename = function() "participant-responses.csv",
       content = function(file) {
         data <- dashboard_data()
+        if (is.null(data)) {
+          stop("Dashboard data is not available.", call. = FALSE)
+        }
         utils::write.csv(format_responses_table(data$responses, data$poll$timezone[[1]]), file, row.names = FALSE, na = "")
       }
     )
@@ -316,6 +382,31 @@ response_link_status_message <- function(poll, options, display_status) {
   "Response link status is unavailable."
 }
 
+dashboard_load_error_ui <- function(poll, message) {
+  title <- if (!is.null(poll) && "title" %in% names(poll)) {
+    ui_text(poll$title[[1]], "Poll results")
+  } else {
+    "Poll results"
+  }
+  shiny::tagList(
+    page_header_ui(
+      eyebrow = "Organizer dashboard",
+      title = title,
+      subtitle = "The dashboard could not be prepared from the current poll data."
+    ),
+    section_panel_ui(
+      "Dashboard unavailable",
+      NULL,
+      shiny::div(
+        class = "dashboard-error-card",
+        shiny::strong("We could not load this poll dashboard."),
+        shiny::p(ui_text(message, "Try refreshing the page. If the issue continues, check the app logs.")),
+        shiny::p(class = "helper-text", "No participant data, tokens, or private links are shown in this error message.")
+      )
+    )
+  )
+}
+
 response_link_controls_ui <- function(ns, display_status) {
   if (identical(display_status, "finalized")) {
     return(shiny::p(class = "helper-text", "Finalized polls cannot be reopened in this version."))
@@ -339,9 +430,42 @@ response_link_controls_ui <- function(ns, display_status) {
   )
 }
 
+empty_ranked_table <- function() {
+  data.frame(
+    "Time option" = character(),
+    "Time zone" = character(),
+    "UTC start" = character(),
+    "UTC end" = character(),
+    "Preferred" = integer(),
+    "Available" = integer(),
+    "Unavailable" = integer(),
+    "Missing" = integer(),
+    "Score" = integer(),
+    "Required conflicts" = integer(),
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+}
+
 format_ranked_table <- function(ranked) {
-  if (nrow(ranked) == 0) {
-    return(ranked)
+  if (is.null(ranked) || nrow(ranked) == 0) {
+    return(empty_ranked_table())
+  }
+  required_columns <- c(
+    "time_option",
+    "time_zone",
+    "start_datetime",
+    "end_datetime",
+    "preferred_count",
+    "available_count",
+    "unavailable_count",
+    "missing_count",
+    "availability_score",
+    "required_attendee_conflicts"
+  )
+  missing_columns <- setdiff(required_columns, names(ranked))
+  if (length(missing_columns) > 0) {
+    stop("Ranked option data is missing required columns.", call. = FALSE)
   }
   formatted <- ranked[c(
     "time_option",
@@ -370,21 +494,51 @@ format_ranked_table <- function(ranked) {
   formatted
 }
 
+empty_responses_table <- function() {
+  data.frame(
+    "Name" = character(),
+    "Email" = character(),
+    "Time option" = character(),
+    "Time zone" = character(),
+    "UTC start" = character(),
+    "UTC end" = character(),
+    "Availability" = character(),
+    "Comment" = character(),
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
+}
+
 format_responses_table <- function(responses, timezone) {
   if (is.null(responses) || nrow(responses) == 0) {
-    return(data.frame(Message = "No participant responses yet."))
+    return(empty_responses_table())
   }
-  formatted <- responses[c("name", "email", "organization", "start_datetime", "end_datetime", "availability", "comment")]
+  required_columns <- c("name", "email", "start_datetime", "end_datetime", "availability", "comment")
+  missing_columns <- setdiff(required_columns, names(responses))
+  if (length(missing_columns) > 0) {
+    stop("Response data is missing required columns.", call. = FALSE)
+  }
+  formatted <- responses[c("name", "email", "start_datetime", "end_datetime", "availability", "comment")]
   formatted$local_time <- vapply(seq_len(nrow(formatted)), function(i) {
     format_readable_option_for_option(responses[i, , drop = FALSE], timezone)
   }, character(1))
-  formatted$email <- vapply(formatted$email, ui_text, character(1), fallback = "")
-  formatted$organization <- vapply(formatted$organization, ui_text, character(1), fallback = "")
+  formatted$email <- vapply(formatted$email, ui_text, character(1), fallback = "Not provided")
   formatted$availability <- vapply(formatted$availability, availability_label, character(1))
   formatted$time_zone <- timezone
-  formatted <- formatted[c("name", "email", "organization", "local_time", "time_zone", "start_datetime", "end_datetime", "availability", "comment")]
-  names(formatted) <- c("Name", "Email", "Organization", "Time option", "Time zone", "UTC start", "UTC end", "Availability", "Comment")
+  formatted <- formatted[c("name", "email", "local_time", "time_zone", "start_datetime", "end_datetime", "availability", "comment")]
+  names(formatted) <- c("Name", "Email", "Time option", "Time zone", "UTC start", "UTC end", "Availability", "Comment")
   formatted
+}
+
+empty_missing_expected_table <- function() {
+  data.frame(
+    "Name" = character(),
+    "Email" = character(),
+    "Organization" = character(),
+    "Required" = character(),
+    check.names = FALSE,
+    stringsAsFactors = FALSE
+  )
 }
 
 decision_stat_ui <- function(label, value, emphasis = FALSE) {
@@ -431,6 +585,9 @@ build_ranked_cards <- function(ranked, participant_count, timezone) {
 }
 
 build_heatmap_table <- function(participants, options, heatmap, timezone) {
+  if (is.null(participants) || is.null(options) || nrow(participants) == 0 || nrow(options) == 0) {
+    return(empty_state_ui("No availability data", "The heatmap will appear after this poll has proposed times and participant responses."))
+  }
   header <- shiny::tags$tr(
     shiny::tags$th("Participant"),
     lapply(seq_len(nrow(options)), function(i) {

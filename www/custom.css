@@ -966,6 +966,10 @@ a {
   margin-bottom: 18px;
 }
 
+.admin-shell .summary-grid {
+  margin-top: 4px;
+}
+
 .summary-card {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -982,6 +986,17 @@ a {
   font-size: 1.35rem;
   line-height: 1.3;
   margin-bottom: 18px;
+}
+
+.dashboard-error-card {
+  border-left: 4px solid var(--cardinal);
+  border-radius: 8px;
+  background: var(--surface-warm);
+  padding: 16px 18px;
+}
+
+.dashboard-error-card p {
+  margin: 8px 0 0;
 }
 
 .decision-stats {
@@ -1060,8 +1075,14 @@ a {
   position: sticky;
   left: 0;
   background: #ffffff;
-  z-index: 1;
+  z-index: 2;
   min-width: 210px;
+  box-shadow: 1px 0 0 var(--line);
+}
+
+.availability-heatmap th:first-child {
+  background: var(--surface-soft);
+  z-index: 3;
 }
 
 .heatmap-time-label {

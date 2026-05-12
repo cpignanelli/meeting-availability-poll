@@ -22,6 +22,12 @@ normalize_email <- function(email) {
   tolower(trimws(email))
 }
 
+normalize_email_vector <- function(email) {
+  email <- as.character(email %||% character())
+  email[is.na(email)] <- ""
+  tolower(trimws(email))
+}
+
 validate_email <- function(email, field = "Email") {
   email <- normalize_email(email)
   if (!nzchar(email)) {
