@@ -1,9 +1,6 @@
 # Local proof-of-concept settings
 APP_BASE_URL=http://127.0.0.1:3838
 
-# Live Posit Connect Cloud pilot URL:
-# APP_BASE_URL=https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/
-
 APP_HOST=127.0.0.1
 APP_PORT=3838
 SQLITE_DB_PATH=data/app.sqlite
@@ -18,7 +15,6 @@ POLL_CREATION_SECRET=replace-with-a-private-random-value
 ORGANIZER_AUTH_SECRET=replace-with-a-different-private-random-value
 
 # SMTP settings for sending organizer login codes.
-# Gmail example: SMTP_HOST=smtp.gmail.com, SMTP_PORT=465, SMTP_USE_SSL=true.
 # Leave blank for local development unless you have an SMTP account.
 SMTP_HOST=
 SMTP_PORT=587

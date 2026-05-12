@@ -2,13 +2,7 @@
 
 A modular R/Shiny application for creating manual meeting availability polls across organizations. It is similar in concept to Doodle, but it does not connect to Outlook, Google Calendar, Microsoft Graph, or any participant calendar. Organizers manually propose candidate times, participants submit availability, and the organizer reviews ranked results through a private link.
 
-For a beginner-friendly GitHub and Posit Connect Cloud deployment walkthrough, see `CONNECT_CLOUD_DEPLOYMENT_GUIDE.md`.
-
-Current live pilot URL:
-
-```text
-https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/
-```
+For a generic GitHub and Posit Connect Cloud deployment walkthrough, see `CONNECT_CLOUD_DEPLOYMENT_GUIDE.md`.
 
 Keep real secret values only in Posit Connect Cloud environment variables. Do not commit them to GitHub.
 
@@ -32,7 +26,7 @@ The public participant page is intentionally simple:
 
 - meeting summary first;
 - privacy notice before data entry;
-- a calendar-style availability grid showing only the dates and times proposed by the organizer;
+- a compact availability board showing only the dates and times proposed by the organizer;
 - explicit labels for "Preferred", "Available", and "Unavailable";
 - clear messaging that final meeting confirmation will follow from the organizer;
 - no public access to results, expected participant lists, or organizer-only details.
@@ -294,7 +288,6 @@ data/app.sqlite
 .Renviron
 .Rhistory
 .RData
-BookingApp/
 ```
 
 4. In Posit Connect Cloud, click **Publish**.
@@ -307,19 +300,19 @@ BookingApp/
 ```text
 SQLITE_DB_PATH=data/app.sqlite
 ORGANIZER_AUTH_SECRET=<a-different-private-random-secret>
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
-SMTP_USERNAME=chrispignanelli33@gmail.com
-SMTP_PASSWORD=<your-16-character-google-app-password>
-SMTP_FROM=chrispignanelli33@gmail.com
-SMTP_USE_SSL=true
+SMTP_HOST=smtp.example.org
+SMTP_PORT=587
+SMTP_USERNAME=you@example.org
+SMTP_PASSWORD=<your-smtp-password>
+SMTP_FROM=you@example.org
+SMTP_USE_SSL=false
 ALLOW_DEV_AUTH_CODE_DISPLAY=false
 ```
 
 If Connect Cloud shows the final public URL before publish, also set:
 
 ```text
-APP_BASE_URL=https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/
+APP_BASE_URL=https://your-connect-app.example/
 ```
 
 If you do not know the URL yet, publish first, copy the deployed URL, then add `APP_BASE_URL` in the content settings and republish/restart.
@@ -335,7 +328,7 @@ For local testing only, you may leave SMTP blank and set `ALLOW_DEV_AUTH_CODE_DI
 10. Create polls by opening the app root URL, signing in, and using the **Create poll** tab:
 
 ```text
-https://cpignanelli1994-meeting-availability-poll.share.connect.posit.cloud/
+https://your-connect-app.example/
 ```
 
 11. Share only the generated `?respond=<token>` participant link with your colleague. Keep the generated `?admin=<token>` organizer link private.
@@ -409,12 +402,12 @@ In the deployed content settings:
 ```text
 SQLITE_DB_PATH=data/app.sqlite
 ORGANIZER_AUTH_SECRET=replace-with-a-long-random-value
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=465
-SMTP_USERNAME=chrispignanelli33@gmail.com
-SMTP_PASSWORD=replace-with-google-app-password
-SMTP_FROM=chrispignanelli33@gmail.com
-SMTP_USE_SSL=true
+SMTP_HOST=smtp.example.org
+SMTP_PORT=587
+SMTP_USERNAME=you@example.org
+SMTP_PASSWORD=replace-with-smtp-password
+SMTP_FROM=you@example.org
+SMTP_USE_SSL=false
 ALLOW_DEV_AUTH_CODE_DISPLAY=false
 ```
 
