@@ -317,10 +317,13 @@ response_week_calendar_ui <- function(ns, week_options, timezone) {
           shiny::tags$tr(
             shiny::tags$th(
               class = "response-board-participant-cell",
-              shiny::span(class = "participant-avatar-mini", "Y"),
               shiny::div(
-                shiny::strong("You"),
-                shiny::span("Your response")
+                class = "response-board-participant-content",
+                shiny::span(class = "participant-avatar-mini", "Y"),
+                shiny::div(
+                  shiny::strong("You"),
+                  shiny::span("Your response")
+                )
               )
             ),
             response_cells

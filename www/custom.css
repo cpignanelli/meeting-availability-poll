@@ -1280,21 +1280,26 @@ a {
 .response-board-participant-cell {
   position: sticky;
   left: 0;
-  z-index: 2;
+  z-index: 4;
   width: 170px;
   min-width: 170px;
   background: #ffffff;
   box-shadow: 1px 0 0 var(--line);
+  background-clip: padding-box;
 }
 
 .response-board-participant-header {
   background: var(--surface);
   color: var(--muted);
   text-align: left;
+  z-index: 5;
 }
 
 .response-board-participant-cell {
   padding: 18px 14px;
+}
+
+.response-board-participant-content {
   display: flex;
   gap: 10px;
   align-items: center;
@@ -1314,12 +1319,12 @@ a {
   flex: 0 0 auto;
 }
 
-.response-board-participant-cell div {
+.response-board-participant-content div {
   display: grid;
   gap: 2px;
 }
 
-.response-board-participant-cell span:last-child {
+.response-board-participant-content span:last-child {
   color: var(--muted);
   font-size: 0.84rem;
 }
