@@ -213,11 +213,14 @@ build_response_calendar_ui <- function(ns, options, timezone) {
 
   shiny::div(
     class = "response-calendar",
-    response_board_legend_ui(),
     shiny::div(
-      class = "response-calendar-note",
-      shiny::strong("Click each cell to choose your response."),
-      shiny::span(paste("Times shown in", unique(calendar$timezone_label)[[1]]))
+      class = "response-calendar-toolbar",
+      shiny::div(
+        class = "response-calendar-note",
+        shiny::strong("Click each cell to choose your response."),
+        shiny::span(paste("Times shown in", unique(calendar$timezone_label)[[1]]))
+      ),
+      response_board_legend_ui()
     ),
     do.call(
       shiny::tabsetPanel,
@@ -303,21 +306,25 @@ response_week_calendar_ui <- function(ns, week_options, timezone) {
   })
 
   shiny::div(
-    class = "response-calendar-scroll",
-    shiny::tags$table(
-      class = "response-calendar-table response-board-table",
-      shiny::tags$thead(header),
-      shiny::tags$tbody(
-        shiny::tags$tr(
-          shiny::tags$th(
-            class = "response-board-participant-cell",
-            shiny::span(class = "participant-avatar-mini", "Y"),
-            shiny::div(
-              shiny::strong("You"),
-              shiny::span("Your response")
-            )
-          ),
-          response_cells
+    class = "response-calendar-board",
+    shiny::div(class = "response-scroll-hint", "Scroll sideways to see all proposed times."),
+    shiny::div(
+      class = "response-calendar-scroll",
+      shiny::tags$table(
+        class = "response-calendar-table response-board-table",
+        shiny::tags$thead(header),
+        shiny::tags$tbody(
+          shiny::tags$tr(
+            shiny::tags$th(
+              class = "response-board-participant-cell",
+              shiny::span(class = "participant-avatar-mini", "Y"),
+              shiny::div(
+                shiny::strong("You"),
+                shiny::span("Your response")
+              )
+            ),
+            response_cells
+          )
         )
       )
     ),
