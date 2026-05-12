@@ -43,6 +43,34 @@ testthat::test_that("dashboard data tolerates blank participant emails", {
   testthat::expect_true("Not provided" %in% response_table$Email)
 })
 
+testthat::test_that("admin dashboard page renders for a poll with responses", {
+  conn <- make_test_connection()
+  on.exit(close_db_connection(conn), add = TRUE)
+  result <- make_sample_poll(conn)
+  options <- get_poll_options(conn, result$poll_id)
+  submit_poll_response(
+    conn,
+    result$poll_id,
+    list(name = "Participant Without Email", email = "", organization = ""),
+    data.frame(option_id = options$option_id, availability = c("preferred", "available"), stringsAsFactors = FALSE),
+    ""
+  )
+
+  shiny::testServer(
+    admin_dashboard_server,
+    args = list(
+      conn = conn,
+      poll_id = shiny::reactiveVal(result$poll_id),
+      organizer_email = shiny::reactiveVal("organizer@example.org")
+    ),
+    {
+      rendered <- paste(as.character(output$admin_page), collapse = "\n")
+      testthat::expect_match(rendered, "Ranked options", fixed = TRUE)
+      testthat::expect_false(grepl("Dashboard unavailable", rendered, fixed = TRUE))
+    }
+  )
+})
+
 testthat::test_that("expected participant matching handles multiple emails independently", {
   timezone <- "America/Toronto"
   start <- as.POSIXct("2026-05-15 09:00:00", tz = timezone)
@@ -124,4 +152,3 @@ testthat::test_that("dashboard data tolerates legacy polls without options", {
   testthat::expect_equal(nrow(data$heatmap), 0)
   testthat::expect_named(data$ranked, names(empty_ranked_options()))
 })
-

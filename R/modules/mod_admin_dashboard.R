@@ -106,7 +106,7 @@ admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organ
                   "Ranked options",
                   "Scores use: preferred = 2, available = 1, unavailable or missing = 0.",
                   shiny::uiOutput(session$ns("ranked_cards")),
-                  shiny::details(
+                  shiny::tags$details(
                     class = "details-panel",
                     shiny::tags$summary("Show detailed ranked table"),
                     DT::DTOutput(session$ns("ranked_table"))
