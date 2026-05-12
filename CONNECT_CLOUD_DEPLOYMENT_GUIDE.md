@@ -84,6 +84,7 @@ In the app content settings or publish workflow, add:
 ```text
 SQLITE_DB_PATH=data/app.sqlite
 APP_BASE_URL=https://your-connect-app.example/
+APP_MAIN_OWNER_EMAIL=owner@example.org
 ORGANIZER_AUTH_SECRET=<a-long-random-secret>
 SMTP_HOST=<smtp-host>
 SMTP_PORT=587
@@ -102,6 +103,8 @@ POLL_CREATION_SECRET=<a-long-random-secret>
 
 `APP_BASE_URL` should be the final public app URL, including the trailing `/`. If you do not know the final URL before the first publish, add it after the app is published, then restart or republish the content.
 
+`APP_MAIN_OWNER_EMAIL` is required. That email receives organizer access request notifications and is the only account that can approve, deny, or revoke secondary organizer access.
+
 For local testing only, you may leave SMTP blank and set:
 
 ```text
@@ -118,11 +121,12 @@ Do not enable development code display on a public deployment.
 https://your-connect-app.example/
 ```
 
-2. Request an organizer login code.
+2. Request an organizer login code using the `APP_MAIN_OWNER_EMAIL` address.
 3. Enter the code and open the **Create poll** tab.
 4. Create a test poll.
-5. Share only the generated public `?respond=<token>` link with participants.
-6. Keep the generated private `?admin=<token>` organizer link as backup access.
+5. Optionally test secondary organizer access by submitting a request from the root page with another email, then signing in as the main owner to approve it.
+6. Share only the generated public `?respond=<token>` link with participants.
+7. Keep the generated private `?admin=<token>` organizer link as backup access.
 
 Participants can respond through the effective expiry date. By default, that is the final proposed meeting date. If an earlier response deadline is set, that earlier date is used.
 

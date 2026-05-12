@@ -86,6 +86,31 @@ schema_statements <- function() {
       used_at TEXT,
       attempts INTEGER NOT NULL DEFAULT 0
     )",
+    "CREATE TABLE IF NOT EXISTS owner_access_requests (
+      request_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      email_normalized TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied')),
+      requested_at TEXT NOT NULL,
+      verified_at TEXT,
+      reviewed_at TEXT,
+      reviewed_by_email TEXT,
+      updated_at TEXT NOT NULL
+    )",
+    "CREATE TABLE IF NOT EXISTS approved_owners (
+      owner_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      first_name TEXT NOT NULL,
+      last_name TEXT NOT NULL,
+      email TEXT NOT NULL,
+      email_normalized TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'approved' CHECK (status IN ('approved', 'revoked')),
+      approved_at TEXT NOT NULL,
+      approved_by_email TEXT NOT NULL,
+      revoked_at TEXT,
+      updated_at TEXT NOT NULL
+    )",
     "CREATE INDEX IF NOT EXISTS idx_polls_response_token ON polls(response_token)",
     "CREATE INDEX IF NOT EXISTS idx_polls_admin_token_hash ON polls(admin_token_hash)",
     "CREATE INDEX IF NOT EXISTS idx_polls_organizer_email_normalized ON polls(organizer_email_normalized)",
@@ -95,7 +120,11 @@ schema_statements <- function() {
     "CREATE INDEX IF NOT EXISTS idx_responses_participant_id ON responses(participant_id)",
     "CREATE INDEX IF NOT EXISTS idx_responses_option_id ON responses(option_id)",
     "CREATE INDEX IF NOT EXISTS idx_audit_poll_id ON audit_log(poll_id)",
-    "CREATE INDEX IF NOT EXISTS idx_login_codes_email_created ON organizer_login_codes(organizer_email_normalized, created_at)"
+    "CREATE INDEX IF NOT EXISTS idx_login_codes_email_created ON organizer_login_codes(organizer_email_normalized, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_owner_access_requests_email ON owner_access_requests(email_normalized)",
+    "CREATE INDEX IF NOT EXISTS idx_owner_access_requests_status ON owner_access_requests(status, requested_at)",
+    "CREATE INDEX IF NOT EXISTS idx_approved_owners_email ON approved_owners(email_normalized)",
+    "CREATE INDEX IF NOT EXISTS idx_approved_owners_status ON approved_owners(status, approved_at)"
   )
 }
 

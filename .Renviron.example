@@ -11,6 +11,9 @@ SQLITE_DB_PATH=data/app.sqlite
 POLL_CREATION_SECRET=replace-with-a-private-random-value
 
 # Organizer portal email-code login.
+# Main owner email controls who can approve secondary organizer access.
+APP_MAIN_OWNER_EMAIL=owner@example.org
+
 # Set ORGANIZER_AUTH_SECRET to a long random value. It is used to hash login codes.
 ORGANIZER_AUTH_SECRET=replace-with-a-different-private-random-value
 

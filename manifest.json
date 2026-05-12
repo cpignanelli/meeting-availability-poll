@@ -2988,10 +2988,10 @@
       "checksum": "8d2c1425fc645226ee41d0ee772080b9"
     },
     "R/db/db_queries.R": {
-      "checksum": "1b545860d7d2b5de6ea5a467be61dab5"
+      "checksum": "ef0edac25fbba8490107bfcfafb50682"
     },
     "R/db/db_schema.R": {
-      "checksum": "0cc22b8d60b6d14b541cb323af2ccba1"
+      "checksum": "f471f45dfc4607834f556b3fc3a1afeb"
     },
     "R/modules/mod_admin_dashboard.R": {
       "checksum": "b2df97d398a3877a52b17b712fa833ad"
@@ -3003,7 +3003,7 @@
       "checksum": "4e5b06784f79508f7359fe007425b8a9"
     },
     "R/modules/mod_organizer_portal.R": {
-      "checksum": "bc4b7804d2af86f9386e1f8d7b9000da"
+      "checksum": "e4217bb3d1233d2e8d4505ae15c781f5"
     },
     "R/modules/mod_respond_poll.R": {
       "checksum": "c9c0220d4fbe5679d8b05d4707be17ee"
@@ -3012,10 +3012,10 @@
       "checksum": "ad1737168f7cb678959535acce440d51"
     },
     "R/utils/auth_helpers.R": {
-      "checksum": "b5894076e95ea399af45ab76026dc9a9"
+      "checksum": "abf3d84f030385909b1810a88a425573"
     },
     "R/utils/email_helpers.R": {
-      "checksum": "fbd402c9f296e982e9a13d5a645f674c"
+      "checksum": "38b47778578e54a027396fccf5b986d2"
     },
     "R/utils/email_text_helpers.R": {
       "checksum": "de71d78588863e395f22ec662e3b9b9e"
@@ -3042,7 +3042,7 @@
       "checksum": "d77fcc4f8a1d14952fa8794ef4b58da3"
     },
     "www/custom.css": {
-      "checksum": "b7496e8d90c2ef44d8606dbb73134b1c"
+      "checksum": "7c857a31aff37f1560cc28c32c979786"
     }
   },
   "users": null

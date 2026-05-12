@@ -372,6 +372,306 @@ reopen_poll <- function(conn, poll_id, response_deadline = "") {
   invisible(TRUE)
 }
 
+owner_role_labels <- function() {
+  c(
+    main_owner = "Main owner",
+    owner = "Approved owner",
+    pending = "Pending approval",
+    denied = "Access denied",
+    revoked = "Access revoked",
+    none = "No access"
+  )
+}
+
+owner_role_label <- function(role) {
+  labels <- owner_role_labels()
+  label <- unname(labels[as.character(role)])
+  if (is.na(label)) "No access" else label
+}
+
+get_owner_role <- function(conn, organizer_email) {
+  organizer_email <- validate_email(organizer_email, field = "Organizer email")
+  if (is_main_owner_email(organizer_email)) {
+    return("main_owner")
+  }
+
+  owner <- DBI::dbGetQuery(
+    conn,
+    "SELECT status FROM approved_owners WHERE email_normalized = ? LIMIT 1",
+    params = list(organizer_email)
+  )
+  if (nrow(owner) > 0) {
+    status <- owner$status[[1]]
+    if (identical(status, "approved")) {
+      return("owner")
+    }
+    if (identical(status, "revoked")) {
+      return("revoked")
+    }
+  }
+
+  request <- DBI::dbGetQuery(
+    conn,
+    "SELECT status FROM owner_access_requests WHERE email_normalized = ? LIMIT 1",
+    params = list(organizer_email)
+  )
+  if (nrow(request) > 0 && request$status[[1]] %in% c("pending", "denied")) {
+    return(request$status[[1]])
+  }
+
+  "none"
+}
+
+owner_has_workspace_access <- function(conn, organizer_email) {
+  get_owner_role(conn, organizer_email) %in% c("main_owner", "owner")
+}
+
+validate_owner_profile <- function(first_name, last_name, email) {
+  first_name <- sanitize_text(first_name, max_chars = 80, required = TRUE, field = "First name")
+  last_name <- sanitize_text(last_name, max_chars = 80, required = TRUE, field = "Last name")
+  email <- validate_email(email, field = "Organizer email")
+  list(
+    first_name = first_name,
+    last_name = last_name,
+    email = email,
+    email_normalized = email
+  )
+}
+
+create_or_update_owner_access_request <- function(conn, first_name, last_name, email) {
+  profile <- validate_owner_profile(first_name, last_name, email)
+  if (is_main_owner_email(profile$email)) {
+    stop("The main owner can sign in directly.", call. = FALSE)
+  }
+
+  requested_at <- db_now()
+  with_db_transaction(conn, function(tx) {
+    owner <- DBI::dbGetQuery(
+      tx,
+      "SELECT status FROM approved_owners WHERE email_normalized = ? LIMIT 1",
+      params = list(profile$email_normalized)
+    )
+    if (nrow(owner) > 0 && identical(owner$status[[1]], "approved")) {
+      stop("This email already has organizer access. Sign in instead.", call. = FALSE)
+    }
+
+    existing <- DBI::dbGetQuery(
+      tx,
+      "SELECT request_id FROM owner_access_requests WHERE email_normalized = ? LIMIT 1",
+      params = list(profile$email_normalized)
+    )
+    if (nrow(existing) == 0) {
+      DBI::dbExecute(
+        tx,
+        "INSERT INTO owner_access_requests (
+          first_name, last_name, email, email_normalized, status,
+          requested_at, verified_at, reviewed_at, reviewed_by_email, updated_at
+        ) VALUES (?, ?, ?, ?, 'pending', ?, ?, NULL, NULL, ?)",
+        params = list(
+          profile$first_name,
+          profile$last_name,
+          profile$email,
+          profile$email_normalized,
+          requested_at,
+          requested_at,
+          requested_at
+        )
+      )
+      request_id <- db_scalar_id(tx)
+    } else {
+      request_id <- existing$request_id[[1]]
+      DBI::dbExecute(
+        tx,
+        "UPDATE owner_access_requests
+         SET first_name = ?, last_name = ?, email = ?, status = 'pending',
+             requested_at = ?, verified_at = ?, reviewed_at = NULL,
+             reviewed_by_email = NULL, updated_at = ?
+         WHERE request_id = ?",
+        params = list(
+          profile$first_name,
+          profile$last_name,
+          profile$email,
+          requested_at,
+          requested_at,
+          requested_at,
+          request_id
+        )
+      )
+    }
+
+    DBI::dbGetQuery(
+      tx,
+      "SELECT * FROM owner_access_requests WHERE request_id = ? LIMIT 1",
+      params = list(request_id)
+    )
+  })
+}
+
+list_owner_access_requests <- function(conn, reviewer_email, status = "pending") {
+  require_main_owner(reviewer_email)
+  status <- sanitize_text(status, max_chars = 20, required = TRUE, field = "Request status")
+  if (!status %in% c("pending", "approved", "denied")) {
+    stop("Request status is invalid.", call. = FALSE)
+  }
+  DBI::dbGetQuery(
+    conn,
+    "SELECT * FROM owner_access_requests
+     WHERE status = ?
+     ORDER BY requested_at ASC, updated_at ASC",
+    params = list(status)
+  )
+}
+
+list_approved_owners <- function(conn, reviewer_email, include_revoked = FALSE) {
+  require_main_owner(reviewer_email)
+  if (isTRUE(include_revoked)) {
+    return(DBI::dbGetQuery(
+      conn,
+      "SELECT * FROM approved_owners ORDER BY updated_at DESC, approved_at DESC"
+    ))
+  }
+  DBI::dbGetQuery(
+    conn,
+    "SELECT * FROM approved_owners
+     WHERE status = 'approved'
+     ORDER BY approved_at DESC, updated_at DESC"
+  )
+}
+
+approve_owner_request <- function(conn, request_id, reviewer_email) {
+  require_main_owner(reviewer_email)
+  reviewer_email <- validate_email(reviewer_email, field = "Reviewer email")
+  request_id <- suppressWarnings(as.integer(request_id))
+  if (is.na(request_id)) {
+    stop("Access request is invalid.", call. = FALSE)
+  }
+  reviewed_at <- db_now()
+
+  with_db_transaction(conn, function(tx) {
+    request <- DBI::dbGetQuery(
+      tx,
+      "SELECT * FROM owner_access_requests WHERE request_id = ? LIMIT 1",
+      params = list(request_id)
+    )
+    if (nrow(request) == 0) {
+      stop("Access request not found.", call. = FALSE)
+    }
+    if (!identical(request$status[[1]], "pending")) {
+      stop("Only pending access requests can be approved.", call. = FALSE)
+    }
+    if (is_main_owner_email(request$email_normalized[[1]])) {
+      stop("The main owner does not need approval.", call. = FALSE)
+    }
+
+    existing_owner <- DBI::dbGetQuery(
+      tx,
+      "SELECT owner_id FROM approved_owners WHERE email_normalized = ? LIMIT 1",
+      params = list(request$email_normalized[[1]])
+    )
+    if (nrow(existing_owner) == 0) {
+      DBI::dbExecute(
+        tx,
+        "INSERT INTO approved_owners (
+          first_name, last_name, email, email_normalized, status,
+          approved_at, approved_by_email, revoked_at, updated_at
+        ) VALUES (?, ?, ?, ?, 'approved', ?, ?, NULL, ?)",
+        params = list(
+          request$first_name[[1]],
+          request$last_name[[1]],
+          request$email[[1]],
+          request$email_normalized[[1]],
+          reviewed_at,
+          reviewer_email,
+          reviewed_at
+        )
+      )
+    } else {
+      DBI::dbExecute(
+        tx,
+        "UPDATE approved_owners
+         SET first_name = ?, last_name = ?, email = ?, status = 'approved',
+             approved_at = ?, approved_by_email = ?, revoked_at = NULL, updated_at = ?
+         WHERE owner_id = ?",
+        params = list(
+          request$first_name[[1]],
+          request$last_name[[1]],
+          request$email[[1]],
+          reviewed_at,
+          reviewer_email,
+          reviewed_at,
+          existing_owner$owner_id[[1]]
+        )
+      )
+    }
+
+    DBI::dbExecute(
+      tx,
+      "UPDATE owner_access_requests
+       SET status = 'approved', reviewed_at = ?, reviewed_by_email = ?, updated_at = ?
+       WHERE request_id = ?",
+      params = list(reviewed_at, reviewer_email, reviewed_at, request_id)
+    )
+  })
+  invisible(TRUE)
+}
+
+deny_owner_request <- function(conn, request_id, reviewer_email) {
+  require_main_owner(reviewer_email)
+  reviewer_email <- validate_email(reviewer_email, field = "Reviewer email")
+  request_id <- suppressWarnings(as.integer(request_id))
+  if (is.na(request_id)) {
+    stop("Access request is invalid.", call. = FALSE)
+  }
+  reviewed_at <- db_now()
+
+  with_db_transaction(conn, function(tx) {
+    affected <- DBI::dbExecute(
+      tx,
+      "UPDATE owner_access_requests
+       SET status = 'denied', reviewed_at = ?, reviewed_by_email = ?, updated_at = ?
+       WHERE request_id = ? AND status = 'pending'",
+      params = list(reviewed_at, reviewer_email, reviewed_at, request_id)
+    )
+    if (identical(as.integer(affected), 0L)) {
+      stop("Only pending access requests can be denied.", call. = FALSE)
+    }
+  })
+  invisible(TRUE)
+}
+
+revoke_approved_owner <- function(conn, owner_id, reviewer_email) {
+  require_main_owner(reviewer_email)
+  reviewer_email <- validate_email(reviewer_email, field = "Reviewer email")
+  owner_id <- suppressWarnings(as.integer(owner_id))
+  if (is.na(owner_id)) {
+    stop("Approved owner is invalid.", call. = FALSE)
+  }
+  revoked_at <- db_now()
+
+  with_db_transaction(conn, function(tx) {
+    owner <- DBI::dbGetQuery(
+      tx,
+      "SELECT * FROM approved_owners WHERE owner_id = ? LIMIT 1",
+      params = list(owner_id)
+    )
+    if (nrow(owner) == 0 || !identical(owner$status[[1]], "approved")) {
+      stop("Only approved owners can be revoked.", call. = FALSE)
+    }
+    if (is_main_owner_email(owner$email_normalized[[1]])) {
+      stop("The main owner cannot be revoked.", call. = FALSE)
+    }
+
+    DBI::dbExecute(
+      tx,
+      "UPDATE approved_owners
+       SET status = 'revoked', revoked_at = ?, updated_at = ?
+       WHERE owner_id = ?",
+      params = list(revoked_at, revoked_at, owner_id)
+    )
+  })
+  invisible(TRUE)
+}
+
 create_organizer_login_code <- function(conn, organizer_email, code = generate_magic_code()) {
   organizer_email <- validate_email(organizer_email, field = "Organizer email")
   code <- validate_magic_code(code)

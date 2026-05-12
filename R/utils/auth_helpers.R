@@ -14,6 +14,33 @@ allow_dev_auth_code_display <- function() {
   truthy_env("ALLOW_DEV_AUTH_CODE_DISPLAY", default = FALSE)
 }
 
+owner_approval_configured <- function() {
+  nzchar(trimws(Sys.getenv("APP_MAIN_OWNER_EMAIL", unset = "")))
+}
+
+app_main_owner_email <- function(required = TRUE) {
+  email <- Sys.getenv("APP_MAIN_OWNER_EMAIL", unset = "")
+  if (!nzchar(trimws(email))) {
+    if (isTRUE(required)) {
+      stop("Set APP_MAIN_OWNER_EMAIL before using organizer access controls.", call. = FALSE)
+    }
+    return("")
+  }
+  validate_email(email, field = "Main owner email")
+}
+
+is_main_owner_email <- function(email) {
+  email <- validate_email(email, field = "Organizer email")
+  identical(email, app_main_owner_email())
+}
+
+require_main_owner <- function(email) {
+  if (!is_main_owner_email(email)) {
+    stop("Only the main owner can manage organizer access.", call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
 organizer_auth_secret <- function() {
   secret <- Sys.getenv("ORGANIZER_AUTH_SECRET", unset = "")
   if (!nzchar(secret)) {

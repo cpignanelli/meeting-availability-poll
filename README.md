@@ -9,6 +9,8 @@ Keep real secret values only in Posit Connect Cloud environment variables. Do no
 ## User workflow
 
 1. The organizer opens the app root URL, signs in with email and a 6-digit code, then creates a poll with meeting details, time zone, optional location details, a Doodle-style proposed-time grid, and an optional earlier response deadline.
+   - The configured main owner can approve or deny secondary organizer access requests.
+   - Approved secondary organizers can create and manage only the polls tied to their own organizer email.
 2. The app generates two links:
    - Public response link: `?respond=<token>`
    - Private organizer link: `?admin=<token>`
@@ -31,7 +33,7 @@ The public participant page is intentionally simple:
 - clear messaging that final meeting confirmation will follow from the organizer;
 - no public access to results, expected participant lists, or organizer-only details.
 
-The organizer dashboard is optimized for deciding quickly: the overview shows the best-ranked option, response progress, response-link status, shareable participant link, ranked options, heatmap, exports, and finalization controls. The app root URL opens the organizer workspace with "My polls" and "Create poll" tabs.
+The organizer dashboard is optimized for deciding quickly: the overview shows the best-ranked option, response progress, response-link status, shareable participant link, ranked options, heatmap, exports, and finalization controls. The app root URL opens the organizer workspace with "My polls" and "Create poll" tabs. The main owner also sees "Access requests" and "Approved owners" tabs.
 
 ## Date, time, and time zones
 
@@ -78,6 +80,8 @@ install.packages(c(
 ```
 
 `blastula` is used when available for SMTP login-code email. The app can also send through `curl` when SMTP is configured. For local development without SMTP, set `ALLOW_DEV_AUTH_CODE_DISPLAY=true` to show organizer login codes on screen.
+
+Owner access request notifications also use the same SMTP settings. On public deployments, configure SMTP before enabling secondary organizer requests so the main owner receives review notifications.
 
 ## Local database setup for proof of concept
 
@@ -194,6 +198,8 @@ Core tables:
 - `finalized_meetings`
 - `audit_log`
 - `organizer_login_codes`
+- `owner_access_requests`
+- `approved_owners`
 
 All Shiny modules call the query layer in `R/db/db_queries.R`; raw SQL is not scattered through UI modules. Writes use parameterized queries and transaction wrappers.
 
@@ -206,6 +212,8 @@ Implemented in this proof of concept:
 - Random 256-bit hex tokens for public and private links.
 - Admin tokens are stored as SHA-256 hashes, not raw tokens.
 - Organizer portal magic codes are stored only as hashes, expire after 10 minutes, and are limited to 5 verification attempts.
+- Organizer workspace access is restricted to the configured main owner and approved secondary owners.
+- Secondary owner access requests require first name, last name, email, email verification, and main-owner approval.
 - Public response links do not expose results.
 - Private organizer links or an email-code organizer portal login are required for dashboard access.
 - Closed or expired response links show organizer contact details so participants can ask whether the link can be reopened.
@@ -221,6 +229,7 @@ Production hardening recommendations:
 - Use a production SMTP account for organizer login codes and monitor failed login attempts without storing raw codes.
 - Add organization authentication for organizer/admin access if this grows beyond a lightweight email-code portal.
 - Add role-based access control if multiple organizers manage polls.
+- Move owner approvals to durable hosted storage before production use.
 - Use a hosted database with encrypted storage and managed backups.
 - Define a retention policy, such as deleting or anonymizing poll data after 30 to 90 days.
 - Add monitoring for failed admin token attempts without logging raw tokens or personal information.
@@ -299,6 +308,7 @@ data/app.sqlite
 
 ```text
 SQLITE_DB_PATH=data/app.sqlite
+APP_MAIN_OWNER_EMAIL=owner@example.org
 ORGANIZER_AUTH_SECRET=<a-different-private-random-secret>
 SMTP_HOST=smtp.example.org
 SMTP_PORT=587
@@ -401,6 +411,7 @@ In the deployed content settings:
 
 ```text
 SQLITE_DB_PATH=data/app.sqlite
+APP_MAIN_OWNER_EMAIL=owner@example.org
 ORGANIZER_AUTH_SECRET=replace-with-a-long-random-value
 SMTP_HOST=smtp.example.org
 SMTP_PORT=587

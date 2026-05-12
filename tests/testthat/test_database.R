@@ -13,7 +13,9 @@ testthat::test_that("database initialization creates required tables idempotentl
     "responses",
     "finalized_meetings",
     "audit_log",
-    "organizer_login_codes"
+    "organizer_login_codes",
+    "owner_access_requests",
+    "approved_owners"
   ) %in% tables))
   poll_columns <- DBI::dbGetQuery(conn, "PRAGMA table_info(polls)")
   testthat::expect_true("organizer_email_normalized" %in% poll_columns$name)

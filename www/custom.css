@@ -1391,6 +1391,25 @@ a {
   margin: 0 auto;
 }
 
+.organizer-auth-grid {
+  max-width: 1180px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.owner-request-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.owner-request-grid > :last-child {
+  grid-column: 1 / -1;
+}
+
 .embedded-create-shell {
   padding: 0;
 }
@@ -1452,6 +1471,38 @@ a {
   gap: 10px;
 }
 
+.owner-access-list {
+  display: grid;
+  gap: 12px;
+}
+
+.owner-access-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 18px;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+}
+
+.owner-access-card h3 {
+  margin: 4px 0;
+  font-size: 1.05rem;
+}
+
+.owner-access-card p {
+  margin: 2px 0;
+}
+
+.owner-access-card-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .visually-hidden-copy-source {
   position: absolute;
   left: -10000px;
@@ -1479,8 +1530,14 @@ a {
 @media (max-width: 980px) {
   .dashboard-lead-grid,
   .finalize-layout,
-  .respond-identity-grid {
+  .respond-identity-grid,
+  .organizer-auth-grid,
+  .owner-request-grid {
     grid-template-columns: 1fr;
+  }
+
+  .owner-request-grid > :last-child {
+    grid-column: auto;
   }
 
   .calendar-toolbar,
