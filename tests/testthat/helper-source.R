@@ -13,11 +13,28 @@ source(file.path(project_root, "R/utils/email_text_helpers.R"), local = TRUE)
 source(file.path(project_root, "R/utils/email_helpers.R"), local = TRUE)
 source(file.path(project_root, "R/utils/ui_helpers.R"), local = TRUE)
 source(file.path(project_root, "R/db/db_schema.R"), local = TRUE)
+source(file.path(project_root, "R/db/db_mongo.R"), local = TRUE)
 source(file.path(project_root, "R/db/db_connect.R"), local = TRUE)
 source(file.path(project_root, "R/db/db_queries.R"), local = TRUE)
 
 make_test_connection <- function() {
   db_path <- tempfile(fileext = ".sqlite")
+  old_backend <- Sys.getenv("DATABASE_BACKEND", unset = NA_character_)
+  old_database_url <- Sys.getenv("DATABASE_URL", unset = NA_character_)
+  on.exit({
+    if (is.na(old_backend)) {
+      Sys.unsetenv("DATABASE_BACKEND")
+    } else {
+      Sys.setenv(DATABASE_BACKEND = old_backend)
+    }
+    if (is.na(old_database_url)) {
+      Sys.unsetenv("DATABASE_URL")
+    } else {
+      Sys.setenv(DATABASE_URL = old_database_url)
+    }
+  }, add = TRUE)
+  Sys.setenv(DATABASE_BACKEND = "sqlite")
+  Sys.unsetenv("DATABASE_URL")
   initialize_database(db_path)
   get_db_connection(db_path = db_path, use_pool = FALSE)
 }

@@ -75,11 +75,13 @@ For a simple manual setup, install the required packages:
 install.packages(c(
   "shiny", "bslib", "DBI", "RSQLite", "pool", "DT",
   "openssl", "digest", "htmltools", "testthat", "rsconnect",
-  "curl", "blastula"
+  "curl", "blastula", "jsonlite", "mongolite"
 ))
 ```
 
 `blastula` is used when available for SMTP login-code email. The app can also send through `curl` when SMTP is configured. For local development without SMTP, set `ALLOW_DEV_AUTH_CODE_DISPLAY=true` to show organizer login codes on screen.
+
+`mongolite` is required only when `DATABASE_BACKEND=mongodb`, but it is included in the project dependencies so hosted deployments can switch from local SQLite to MongoDB Atlas without code changes.
 
 Owner access request notifications also use the same SMTP settings. On public deployments, configure SMTP before enabling secondary organizer requests so the main owner receives review notifications.
 
@@ -114,6 +116,29 @@ DBI::dbDisconnect(con)
 9. SQLite is intended for local proof-of-concept use.
 10. A hosted database is recommended for production deployment.
 
+## MongoDB Atlas backend for live pilot use
+
+SQLite remains the default because it is simple and works locally. For a live Posit Connect pilot where data should survive app restarts and redeployments, set the app to use MongoDB Atlas with environment variables:
+
+```text
+DATABASE_BACKEND=mongodb
+MONGODB_URI=<mongodb+srv connection string>
+MONGODB_DATABASE=meeting_poll
+```
+
+`MONGODB_URI` contains the database username and password, so store it only in `.Renviron` locally or in deployment secret variables. Do not commit it to Git.
+
+MongoDB setup checklist:
+
+1. Create a MongoDB Atlas Free cluster.
+2. Create a database user with read/write access to the app database.
+3. Add the Posit Connect Cloud outbound IP addresses to the MongoDB Atlas IP Access List.
+4. Save `DATABASE_BACKEND`, `MONGODB_URI`, and `MONGODB_DATABASE` in the deployed app variables.
+5. Republish or restart the app.
+6. Create a new test poll and verify that responses and dashboard results persist after restart.
+
+This integration starts with an empty MongoDB database. It does not migrate existing pilot data from `data/app.sqlite`.
+
 ## Running locally
 
 From the project root:
@@ -133,6 +158,7 @@ For link generation outside RStudio, set `APP_BASE_URL` in `.Renviron`:
 
 ```text
 APP_BASE_URL=https://your-app.example.com
+DATABASE_BACKEND=sqlite
 SQLITE_DB_PATH=data/app.sqlite
 ORGANIZER_AUTH_SECRET=replace-with-a-long-random-value
 ```
@@ -188,6 +214,8 @@ Live proof-of-concept caveats:
 
 The local proof of concept uses SQLite through `DBI` and `RSQLite`. Runtime connections are created through `get_db_connection()`, which uses `pool` when available. Schema creation is idempotent through `initialize_database()`.
 
+For hosted pilot persistence, `DATABASE_BACKEND=mongodb` switches the query layer to MongoDB Atlas through `mongolite`. The UI modules still call the same functions in `R/db/db_queries.R`; backend-specific behavior is contained in `R/db/db_connect.R`, `R/db/db_schema.R`, and `R/db/db_mongo.R`.
+
 Core tables:
 
 - `polls`
@@ -201,7 +229,9 @@ Core tables:
 - `owner_access_requests`
 - `approved_owners`
 
-All Shiny modules call the query layer in `R/db/db_queries.R`; raw SQL is not scattered through UI modules. Writes use parameterized queries and transaction wrappers.
+MongoDB uses collections with the same logical names plus a `counters` collection for numeric IDs used by the existing Shiny modules.
+
+All Shiny modules call the query layer in `R/db/db_queries.R`; raw SQL is not scattered through UI modules. SQLite writes use parameterized queries and transaction wrappers. MongoDB writes go through the adapter in `R/db/db_mongo.R` and keep the same module-facing query API.
 
 ## Security and privacy
 
@@ -221,6 +251,7 @@ Implemented in this proof of concept:
 - Database writes use parameterized DBI queries.
 - Audit logs avoid personal information.
 - Local SQLite files and secrets are ignored by Git.
+- MongoDB connection strings are read only from environment variables and should be stored as deployment secrets.
 - App errors shown to users avoid database paths, stack traces, and secrets.
 
 Production hardening recommendations:
@@ -236,19 +267,18 @@ Production hardening recommendations:
 
 ## Deployment notes
 
-The app can be deployed later to Posit Connect or shinyapps.io. For production, do not rely on local writable files for persistence. Use a hosted database such as PostgreSQL, Supabase, Neon, Azure SQL, or another managed database service.
+The app can be deployed later to Posit Connect or shinyapps.io. For production, do not rely on local writable files for persistence. Use a hosted database such as MongoDB Atlas, PostgreSQL, Supabase, Neon, Azure SQL, or another managed database service.
 
 Recommended deployment approach:
 
 - Keep SQLite for local development only.
 - Set production secrets through environment variables, not code.
-- Move the database implementation behind the existing DBI query layer.
-- Prefer `DATABASE_URL` or explicit `DB_HOST`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, and `DB_PORT` values for hosted databases.
+- Use `DATABASE_BACKEND=mongodb`, `MONGODB_URI`, and `MONGODB_DATABASE` for the MongoDB Atlas adapter.
 - Review platform-specific file persistence behavior before deploying.
 
 ## Posit Connect pilot deployment
 
-This section is for testing the app in your own Posit Connect account with low-risk pilot data. It uses SQLite only as a short-lived proof-of-concept database. Posit Connect allows interactive apps to write to their working directory, but that directory is not appropriate for durable production storage because redeployments replace the bundle directory and multiple app processes can collide on local file writes.
+This section is for testing the app in your own Posit Connect account with low-risk pilot data. SQLite can be used as a short-lived proof-of-concept database, but MongoDB Atlas is the better free hosted option when you need data to persist across app restarts and redeployments. Posit Connect can let interactive apps write to their working directory, but that directory is not appropriate for durable persistence because redeployments replace the bundle directory and multiple app processes can collide on local file writes.
 
 ### Posit Connect Cloud Free note
 
@@ -307,7 +337,6 @@ data/app.sqlite
 9. In Advanced settings, add secret/environment variables:
 
 ```text
-SQLITE_DB_PATH=data/app.sqlite
 APP_MAIN_OWNER_EMAIL=owner@example.org
 ORGANIZER_AUTH_SECRET=<a-different-private-random-secret>
 SMTP_HOST=smtp.example.org
@@ -317,6 +346,21 @@ SMTP_PASSWORD=<your-smtp-password>
 SMTP_FROM=you@example.org
 SMTP_USE_SSL=false
 ALLOW_DEV_AUTH_CODE_DISPLAY=false
+```
+
+For durable pilot persistence with MongoDB Atlas, also add:
+
+```text
+DATABASE_BACKEND=mongodb
+MONGODB_URI=<mongodb+srv connection string>
+MONGODB_DATABASE=meeting_poll
+```
+
+For a short SQLite-only pilot, use this instead of the MongoDB variables:
+
+```text
+DATABASE_BACKEND=sqlite
+SQLITE_DB_PATH=data/app.sqlite
 ```
 
 If Connect Cloud shows the final public URL before publish, also set:
@@ -410,7 +454,6 @@ In the deployed content settings:
 3. Open the **Advanced** settings and add environment variables:
 
 ```text
-SQLITE_DB_PATH=data/app.sqlite
 APP_MAIN_OWNER_EMAIL=owner@example.org
 ORGANIZER_AUTH_SECRET=replace-with-a-long-random-value
 SMTP_HOST=smtp.example.org
@@ -422,6 +465,21 @@ SMTP_USE_SSL=false
 ALLOW_DEV_AUTH_CODE_DISPLAY=false
 ```
 
+For MongoDB Atlas hosted pilot persistence, add:
+
+```text
+DATABASE_BACKEND=mongodb
+MONGODB_URI=<mongodb+srv connection string>
+MONGODB_DATABASE=meeting_poll
+```
+
+For a SQLite-only proof of concept, add:
+
+```text
+DATABASE_BACKEND=sqlite
+SQLITE_DB_PATH=data/app.sqlite
+```
+
 Optional but recommended after the final URL is known:
 
 ```text
@@ -429,7 +487,7 @@ APP_BASE_URL=https://connect.example.org/your-app-path/
 ```
 
 4. Restart the app/content after changing environment variables.
-5. For the SQLite pilot only, keep the app to one running process if your Connect server exposes process scaling settings. This avoids concurrent SQLite writes from multiple R processes.
+5. For the SQLite pilot only, keep the app to one running process if your Connect server exposes process scaling settings. This avoids concurrent SQLite writes from multiple R processes. MongoDB Atlas does not need that SQLite-specific constraint.
 
 ### 5. Create a test poll
 
@@ -449,13 +507,13 @@ Redeploy with:
 source("scripts/deploy_posit_connect.R")
 ```
 
-Important: a redeployment can remove files written to the app working directory, including the SQLite proof-of-concept database. Export results before redeploying, or move to a hosted database before collecting important data.
+Important: a redeployment can remove files written to the app working directory, including the SQLite proof-of-concept database. Export results before redeploying, or use the MongoDB Atlas backend before collecting important data.
 
 ### 7. Production path after the pilot
 
 Before production use:
 
-- Replace SQLite with a hosted database such as PostgreSQL, Supabase, Neon, Azure SQL, or another managed database.
+- Use a hosted database such as MongoDB Atlas, PostgreSQL, Supabase, Neon, Azure SQL, or another managed database.
 - Keep secrets in Posit Connect environment variables.
 - Keep poll creation behind authentication or a stronger admin workflow.
 - Define retention/deletion rules for personal information.
@@ -487,6 +545,7 @@ Rscript tests/testthat.R
 Current tests cover:
 
 - Database schema creation
+- Database backend selection
 - Local SQLite initialization
 - Poll creation and token lookup
 - Token generation and hashing

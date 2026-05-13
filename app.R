@@ -7,6 +7,7 @@ source("R/utils/email_text_helpers.R", local = TRUE)
 source("R/utils/email_helpers.R", local = TRUE)
 source("R/utils/ui_helpers.R", local = TRUE)
 source("R/db/db_schema.R", local = TRUE)
+source("R/db/db_mongo.R", local = TRUE)
 source("R/db/db_connect.R", local = TRUE)
 source("R/db/db_queries.R", local = TRUE)
 source("R/styles/app_theme.R", local = TRUE)
@@ -16,7 +17,7 @@ source("R/modules/mod_finalize_poll.R", local = TRUE)
 source("R/modules/mod_admin_dashboard.R", local = TRUE)
 source("R/modules/mod_organizer_portal.R", local = TRUE)
 
-required_packages <- c("shiny", "bslib", "DBI", "RSQLite", "pool", "DT", "openssl", "digest", "htmltools")
+required_packages <- c("shiny", "bslib", "DBI", "RSQLite", "pool", "DT", "openssl", "digest", "htmltools", "jsonlite", "mongolite")
 missing_packages <- required_packages[!vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing_packages) > 0) {
   stop(

@@ -16,7 +16,23 @@ app_title <- Sys.getenv("CONNECT_APP_TITLE", unset = "Meeting Availability Poll"
 account <- Sys.getenv("CONNECT_ACCOUNT", unset = "")
 server <- Sys.getenv("CONNECT_SERVER_NAME", unset = "")
 
-env_var_candidates <- c("APP_BASE_URL", "SQLITE_DB_PATH", "POLL_CREATION_SECRET")
+env_var_candidates <- c(
+  "APP_BASE_URL",
+  "APP_MAIN_OWNER_EMAIL",
+  "ORGANIZER_AUTH_SECRET",
+  "DATABASE_BACKEND",
+  "SQLITE_DB_PATH",
+  "MONGODB_URI",
+  "MONGODB_DATABASE",
+  "SMTP_HOST",
+  "SMTP_PORT",
+  "SMTP_USERNAME",
+  "SMTP_PASSWORD",
+  "SMTP_FROM",
+  "SMTP_USE_SSL",
+  "ALLOW_DEV_AUTH_CODE_DISPLAY",
+  "POLL_CREATION_SECRET"
+)
 env_vars <- env_var_candidates[nzchar(Sys.getenv(env_var_candidates, unset = ""))]
 if (length(env_vars) == 0) {
   env_vars <- NULL

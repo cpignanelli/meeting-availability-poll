@@ -6,7 +6,7 @@ Do not commit real participant data, local SQLite databases, `.Renviron`, API ke
 
 ## What You Are Publishing
 
-You are publishing the app code only. You are not publishing the local proof-of-concept database.
+You are publishing the app code only. You are not publishing the local proof-of-concept database or any secret database credentials.
 
 Commit these files and folders:
 
@@ -82,7 +82,6 @@ Free Connect Cloud workflows may require a public GitHub repository. Use low-ris
 In the app content settings or publish workflow, add:
 
 ```text
-SQLITE_DB_PATH=data/app.sqlite
 APP_BASE_URL=https://your-connect-app.example/
 APP_MAIN_OWNER_EMAIL=owner@example.org
 ORGANIZER_AUTH_SECRET=<a-long-random-secret>
@@ -93,6 +92,23 @@ SMTP_PASSWORD=<smtp-password>
 SMTP_FROM=you@example.org
 SMTP_USE_SSL=false
 ALLOW_DEV_AUTH_CODE_DISPLAY=false
+```
+
+For MongoDB Atlas hosted persistence, add these variables too:
+
+```text
+DATABASE_BACKEND=mongodb
+MONGODB_URI=<mongodb+srv connection string>
+MONGODB_DATABASE=meeting_poll
+```
+
+Save `MONGODB_URI` as a secret. It contains the database username and password and must never be committed to Git.
+
+For a short SQLite-only proof of concept, use this instead:
+
+```text
+DATABASE_BACKEND=sqlite
+SQLITE_DB_PATH=data/app.sqlite
 ```
 
 Optional legacy fallback:
@@ -112,6 +128,28 @@ ALLOW_DEV_AUTH_CODE_DISPLAY=true
 ```
 
 Do not enable development code display on a public deployment.
+
+## MongoDB Atlas Checklist
+
+Use MongoDB Atlas Free when you want a no-cost hosted database for live pilot testing on Posit Connect Cloud.
+
+1. Create a Free cluster.
+2. Create a database user for the app.
+3. Give that user read/write access to the app database.
+4. Add the Posit Connect Cloud outbound IP addresses to Atlas Network Access.
+5. Copy the MongoDB SRV connection string and replace the password placeholder.
+6. In Connect Cloud variables, set:
+
+```text
+DATABASE_BACKEND=mongodb
+MONGODB_URI=<mongodb+srv connection string>
+MONGODB_DATABASE=meeting_poll
+```
+
+7. Restart or republish the app.
+8. Create a new poll, submit a response, view results, then restart the app to confirm the data persists.
+
+This app starts MongoDB as a clean backend. It does not migrate existing SQLite pilot data into Atlas.
 
 ## Test The Deployed App
 
@@ -136,7 +174,7 @@ SQLite is suitable for local development and short proof-of-concept testing only
 
 Before production use:
 
-- move persistence to a hosted database such as PostgreSQL, Supabase, Neon, Azure SQL, or another managed database;
+- move persistence to a hosted database such as MongoDB Atlas, PostgreSQL, Supabase, Neon, Azure SQL, or another managed database;
 - keep secrets in platform environment variables;
 - define a retention/deletion policy for personal information;
 - add platform-level rate limiting or other abuse controls;
@@ -169,6 +207,10 @@ Set `APP_BASE_URL` to the deployed app URL, then restart or republish.
 
 Confirm that `ORGANIZER_AUTH_SECRET` and all SMTP variables are set in the deployed content settings. Keep `ALLOW_DEV_AUTH_CODE_DISPLAY=false` on public deployments.
 
+### MongoDB connection fails
+
+Confirm that `DATABASE_BACKEND=mongodb`, `MONGODB_URI`, and `MONGODB_DATABASE` are set in the deployed content settings. Also confirm that the database user password in `MONGODB_URI` is current and that the Posit Connect Cloud outbound IP addresses are allowlisted in MongoDB Atlas.
+
 ### Poll data disappeared
 
-This is a known limitation of SQLite proof-of-concept deployments. Export results before redeploying, or move to a hosted database before collecting important data.
+This is a known limitation of SQLite proof-of-concept deployments. Export results before redeploying, or switch to the MongoDB Atlas backend before collecting important data.

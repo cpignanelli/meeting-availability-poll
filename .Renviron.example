@@ -3,7 +3,18 @@ APP_BASE_URL=http://127.0.0.1:3838
 
 APP_HOST=127.0.0.1
 APP_PORT=3838
+
+# Database backend.
+# Leave DATABASE_BACKEND unset or set to sqlite for local proof-of-concept use.
+DATABASE_BACKEND=sqlite
 SQLITE_DB_PATH=data/app.sqlite
+
+# Optional hosted MongoDB Atlas backend for live pilot deployments.
+# Store the real URI only in your local .Renviron or deployment secret settings.
+# Do not commit the connection string because it contains database credentials.
+# DATABASE_BACKEND=mongodb
+# MONGODB_URI=mongodb+srv://<user>:<password>@<cluster-host>/?retryWrites=true&w=majority
+# MONGODB_DATABASE=meeting_poll
 
 # Optional legacy/dev fallback.
 # If set, ?create=<this-value> opens the old standalone create-poll route.
@@ -29,11 +40,3 @@ SMTP_USE_SSL=false
 # Local development only: if true and SMTP is not configured, the login code is shown on screen.
 # Do not enable this on public deployments.
 ALLOW_DEV_AUTH_CODE_DISPLAY=false
-
-# Future hosted database settings. Do not commit real values.
-# DATABASE_URL=
-# DB_HOST=
-# DB_NAME=
-# DB_USER=
-# DB_PASSWORD=
-# DB_PORT=

@@ -1714,6 +1714,35 @@
         "RemoteSha": "0.13"
       }
     },
+    "mongolite": {
+      "Source": "CRAN",
+      "Repository": "https://cloud.r-project.org",
+      "description": {
+        "Package": "mongolite",
+        "Type": "Package",
+        "Title": "Fast and Simple 'MongoDB' Client for R",
+        "Description": "High-performance MongoDB client based on 'mongo-c-driver' and 'jsonlite'.\n    Includes support for aggregation, indexing, map-reduce, streaming, encryption,\n    enterprise authentication, and GridFS. The online user manual provides an overview \n    of the available methods in the package: <https://jeroen.github.io/mongolite/>.",
+        "Version": "4.0.0",
+        "Authors@R": "c(\n    person(\"Jeroen\", \"Ooms\", ,\"jeroenooms@gmail.com\", role = c(\"aut\", \"cre\"),\n      comment = c(ORCID = \"0000-0002-4035-0289\")),\n    person(\"MongoDB, Inc\", role = \"cph\", \n      comment = \"Bundled mongo-c-driver, see AUTHORS file\"))",
+        "Imports": "jsonlite (>= 1.4), openssl (>= 1.0), mime",
+        "License": "Apache License 2.0",
+        "URL": "https://jeroen.r-universe.dev/mongolite",
+        "BugReports": "https://github.com/jeroen/mongolite/issues",
+        "SystemRequirements": "OpenSSL, Cyrus SASL (aka libsasl2)",
+        "RoxygenNote": "7.3.2.9000",
+        "Suggests": "curl, spelling, nycflights13, ggplot2",
+        "Language": "en-GB",
+        "Encoding": "UTF-8",
+        "NeedsCompilation": "yes",
+        "Packaged": "2025-04-01 22:08:05 UTC; jeroen",
+        "Author": "Jeroen Ooms [aut, cre] (<https://orcid.org/0000-0002-4035-0289>),\n  MongoDB, Inc [cph] (Bundled mongo-c-driver, see AUTHORS file)",
+        "Maintainer": "Jeroen Ooms <jeroenooms@gmail.com>",
+        "Repository": "CRAN",
+        "Date/Publication": "2025-04-01 23:00:07 UTC",
+        "Built": "R 4.5.0; aarch64-apple-darwin20; 2025-04-04 17:40:01 UTC; unix",
+        "Archs": "mongolite.so.dSYM"
+      }
+    },
     "openssl": {
       "Source": "CRAN",
       "Repository": "https://cloud.r-project.org",
@@ -2979,22 +3008,25 @@
   },
   "files": {
     "app.R": {
-      "checksum": "bb1b03ad44a1e3fbe2d0526a47747119"
+      "checksum": "deabe8aa9ee4de8ba7c8fdf22222d84f"
     },
     "data/.gitkeep": {
       "checksum": "68b329da9893e34099c7d8ad5cb9c940"
     },
     "R/db/db_connect.R": {
-      "checksum": "8d2c1425fc645226ee41d0ee772080b9"
+      "checksum": "bf1ea86179bfc439bfeb4533b0255a1a"
+    },
+    "R/db/db_mongo.R": {
+      "checksum": "ff17bdd8b7ff81f299cadd140e47d8d9"
     },
     "R/db/db_queries.R": {
-      "checksum": "ef0edac25fbba8490107bfcfafb50682"
+      "checksum": "606cae8382d246f009310187fb280600"
     },
     "R/db/db_schema.R": {
       "checksum": "f471f45dfc4607834f556b3fc3a1afeb"
     },
     "R/modules/mod_admin_dashboard.R": {
-      "checksum": "b2df97d398a3877a52b17b712fa833ad"
+      "checksum": "a33d831852c04c9cf80bf7c5c6d72949"
     },
     "R/modules/mod_create_poll.R": {
       "checksum": "0ec22147447ee1ab2dce43b22dce21d2"
@@ -3006,7 +3038,7 @@
       "checksum": "56e6c3a7df658b529eebec0fb9d57d52"
     },
     "R/modules/mod_respond_poll.R": {
-      "checksum": "c9c0220d4fbe5679d8b05d4707be17ee"
+      "checksum": "798f0ce32a83884ba852bbe833045579"
     },
     "R/styles/app_theme.R": {
       "checksum": "ad1737168f7cb678959535acce440d51"
@@ -3024,7 +3056,7 @@
       "checksum": "691dfb01e1650a62399f1b3f4eaf45a7"
     },
     "R/utils/scoring.R": {
-      "checksum": "ae16742f28bb5b688182390a4af2ca2c"
+      "checksum": "0631d9b47fde02a28d9148b423948e46"
     },
     "R/utils/time_helpers.R": {
       "checksum": "e732491ca244b35d6f69c4e59cc69765"
@@ -3033,16 +3065,16 @@
       "checksum": "3fe885e7a949ec9207445a535b147cd6"
     },
     "R/utils/validation.R": {
-      "checksum": "57ad65409943959b0f173c8166e65b24"
+      "checksum": "4ac532feac879b7c8d65c53afb5e805b"
     },
     "renv.lock": {
-      "checksum": "d38c0106a1cf717a8fbe0595119f0146"
+      "checksum": "469e9d6dab9911308419228d484e9004"
     },
     "www/app.js": {
       "checksum": "d77fcc4f8a1d14952fa8794ef4b58da3"
     },
     "www/custom.css": {
-      "checksum": "7c857a31aff37f1560cc28c32c979786"
+      "checksum": "eb7067dfa8bbcfefb2e8f0e6215f11d3"
     }
   },
   "users": null

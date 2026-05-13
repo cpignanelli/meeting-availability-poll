@@ -1847,6 +1847,37 @@
       "Maintainer": "Yihui Xie <xie@yihui.name>",
       "Repository": "CRAN"
     },
+    "mongolite": {
+      "Package": "mongolite",
+      "Version": "4.0.0",
+      "Source": "Repository",
+      "Type": "Package",
+      "Title": "Fast and Simple 'MongoDB' Client for R",
+      "Description": "High-performance MongoDB client based on 'mongo-c-driver' and 'jsonlite'. Includes support for aggregation, indexing, map-reduce, streaming, encryption, enterprise authentication, and GridFS. The online user manual provides an overview  of the available methods in the package: <https://jeroen.github.io/mongolite/>.",
+      "Authors@R": "c( person(\"Jeroen\", \"Ooms\", ,\"jeroenooms@gmail.com\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0002-4035-0289\")), person(\"MongoDB, Inc\", role = \"cph\",  comment = \"Bundled mongo-c-driver, see AUTHORS file\"))",
+      "Imports": [
+        "jsonlite (>= 1.4)",
+        "openssl (>= 1.0)",
+        "mime"
+      ],
+      "License": "Apache License 2.0",
+      "URL": "https://jeroen.r-universe.dev/mongolite",
+      "BugReports": "https://github.com/jeroen/mongolite/issues",
+      "SystemRequirements": "OpenSSL, Cyrus SASL (aka libsasl2)",
+      "RoxygenNote": "7.3.2.9000",
+      "Suggests": [
+        "curl",
+        "spelling",
+        "nycflights13",
+        "ggplot2"
+      ],
+      "Language": "en-GB",
+      "Encoding": "UTF-8",
+      "NeedsCompilation": "yes",
+      "Author": "Jeroen Ooms [aut, cre] (<https://orcid.org/0000-0002-4035-0289>), MongoDB, Inc [cph] (Bundled mongo-c-driver, see AUTHORS file)",
+      "Maintainer": "Jeroen Ooms <jeroenooms@gmail.com>",
+      "Repository": "CRAN"
+    },
     "openssl": {
       "Package": "openssl",
       "Version": "2.3.5",

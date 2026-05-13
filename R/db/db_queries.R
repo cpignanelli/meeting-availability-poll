@@ -7,6 +7,9 @@ db_scalar_id <- function(conn) {
 }
 
 audit_event <- function(conn, poll_id, event_type, event_detail = "") {
+  if (is_mongo_connection(conn)) {
+    return(mongo_audit_event(conn, poll_id, event_type, event_detail))
+  }
   DBI::dbExecute(
     conn,
     "INSERT INTO audit_log (poll_id, event_type, event_detail, created_at)
@@ -16,6 +19,9 @@ audit_event <- function(conn, poll_id, event_type, event_detail = "") {
 }
 
 create_poll_record <- function(conn, poll, options, expected = data.frame()) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_create_poll_record(conn, poll, options, expected))
+  }
   admin_token <- generate_token()
   response_token <- generate_token()
   created_at <- db_now()
@@ -94,6 +100,9 @@ create_poll_record <- function(conn, poll, options, expected = data.frame()) {
 }
 
 get_poll_by_response_token <- function(conn, response_token) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_get_poll_by_response_token(conn, response_token))
+  }
   response_token <- validate_token(response_token, field = "Response link token")
   result <- DBI::dbGetQuery(
     conn,
@@ -104,6 +113,9 @@ get_poll_by_response_token <- function(conn, response_token) {
 }
 
 get_poll_by_admin_token <- function(conn, admin_token) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_get_poll_by_admin_token(conn, admin_token))
+  }
   admin_token <- validate_token(admin_token, field = "Admin link token")
   result <- DBI::dbGetQuery(
     conn,
@@ -114,6 +126,9 @@ get_poll_by_admin_token <- function(conn, admin_token) {
 }
 
 get_poll_for_organizer <- function(conn, poll_id, organizer_email) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_get_poll_for_organizer(conn, poll_id, organizer_email))
+  }
   organizer_email <- validate_email(organizer_email, field = "Organizer email")
   poll_id <- as.integer(poll_id)
   if (is.na(poll_id)) {
@@ -130,6 +145,9 @@ get_poll_for_organizer <- function(conn, poll_id, organizer_email) {
 }
 
 list_polls_for_organizer <- function(conn, organizer_email) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_list_polls_for_organizer(conn, organizer_email))
+  }
   organizer_email <- validate_email(organizer_email, field = "Organizer email")
   DBI::dbGetQuery(
     conn,
@@ -148,6 +166,9 @@ list_polls_for_organizer <- function(conn, organizer_email) {
 }
 
 get_poll_options <- function(conn, poll_id) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_get_poll_options(conn, poll_id))
+  }
   DBI::dbGetQuery(
     conn,
     "SELECT * FROM poll_options WHERE poll_id = ? ORDER BY option_order, start_datetime",
@@ -156,6 +177,9 @@ get_poll_options <- function(conn, poll_id) {
 }
 
 get_expected_participants <- function(conn, poll_id) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_get_expected_participants(conn, poll_id))
+  }
   DBI::dbGetQuery(
     conn,
     "SELECT * FROM expected_participants WHERE poll_id = ? ORDER BY name, email",
@@ -164,6 +188,9 @@ get_expected_participants <- function(conn, poll_id) {
 }
 
 get_participants <- function(conn, poll_id) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_get_participants(conn, poll_id))
+  }
   DBI::dbGetQuery(
     conn,
     "SELECT * FROM participants WHERE poll_id = ? ORDER BY submitted_at, name",
@@ -172,6 +199,9 @@ get_participants <- function(conn, poll_id) {
 }
 
 get_responses_for_poll <- function(conn, poll_id) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_get_responses_for_poll(conn, poll_id))
+  }
   DBI::dbGetQuery(
     conn,
     "SELECT
@@ -188,6 +218,9 @@ get_responses_for_poll <- function(conn, poll_id) {
 }
 
 get_finalized_meeting <- function(conn, poll_id) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_get_finalized_meeting(conn, poll_id))
+  }
   result <- DBI::dbGetQuery(
     conn,
     "SELECT f.*, o.display_label, o.start_datetime, o.end_datetime
@@ -201,6 +234,9 @@ get_finalized_meeting <- function(conn, poll_id) {
 }
 
 get_poll_dashboard_data <- function(conn, poll_id) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_get_poll_dashboard_data(conn, poll_id))
+  }
   poll <- DBI::dbGetQuery(conn, "SELECT * FROM polls WHERE poll_id = ? LIMIT 1", params = list(poll_id))
   if (nrow(poll) == 0) {
     return(NULL)
@@ -226,6 +262,9 @@ get_poll_dashboard_data <- function(conn, poll_id) {
 }
 
 submit_poll_response <- function(conn, poll_id, participant, response_values, comment = "") {
+  if (is_mongo_connection(conn)) {
+    return(mongo_submit_poll_response(conn, poll_id, participant, response_values, comment))
+  }
   submitted_at <- db_now()
   participant$email <- validate_optional_email(participant$email, field = "Participant email")
   participant$organization <- sanitize_text(participant$organization %||% "", max_chars = 160, required = FALSE, field = "Organization")
@@ -293,6 +332,9 @@ submit_poll_response <- function(conn, poll_id, participant, response_values, co
 }
 
 finalize_meeting <- function(conn, poll_id, selected_option_id, final_notes = "") {
+  if (is_mongo_connection(conn)) {
+    return(mongo_finalize_meeting(conn, poll_id, selected_option_id, final_notes))
+  }
   finalized_at <- db_now()
   final_notes <- sanitize_text(final_notes, max_chars = 2000)
   with_db_transaction(conn, function(tx) {
@@ -329,6 +371,9 @@ finalize_meeting <- function(conn, poll_id, selected_option_id, final_notes = ""
 }
 
 close_poll <- function(conn, poll_id) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_close_poll(conn, poll_id))
+  }
   closed_at <- db_now()
   with_db_transaction(conn, function(tx) {
     DBI::dbExecute(
@@ -343,6 +388,9 @@ close_poll <- function(conn, poll_id) {
 }
 
 reopen_poll <- function(conn, poll_id, response_deadline = "") {
+  if (is_mongo_connection(conn)) {
+    return(mongo_reopen_poll(conn, poll_id, response_deadline))
+  }
   response_deadline <- sanitize_text(response_deadline, max_chars = 40)
   reopened_at <- db_now()
 
@@ -390,6 +438,9 @@ owner_role_label <- function(role) {
 }
 
 get_owner_role <- function(conn, organizer_email) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_get_owner_role(conn, organizer_email))
+  }
   organizer_email <- validate_email(organizer_email, field = "Organizer email")
   if (is_main_owner_email(organizer_email)) {
     return("main_owner")
@@ -439,6 +490,9 @@ validate_owner_profile <- function(first_name, last_name, email) {
 }
 
 create_or_update_owner_access_request <- function(conn, first_name, last_name, email) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_create_or_update_owner_access_request(conn, first_name, last_name, email))
+  }
   profile <- validate_owner_profile(first_name, last_name, email)
   if (is_main_owner_email(profile$email)) {
     stop("The main owner can sign in directly.", call. = FALSE)
@@ -508,6 +562,9 @@ create_or_update_owner_access_request <- function(conn, first_name, last_name, e
 }
 
 list_owner_access_requests <- function(conn, reviewer_email, status = "pending") {
+  if (is_mongo_connection(conn)) {
+    return(mongo_list_owner_access_requests(conn, reviewer_email, status))
+  }
   require_main_owner(reviewer_email)
   status <- sanitize_text(status, max_chars = 20, required = TRUE, field = "Request status")
   if (!status %in% c("pending", "approved", "denied")) {
@@ -523,6 +580,9 @@ list_owner_access_requests <- function(conn, reviewer_email, status = "pending")
 }
 
 list_approved_owners <- function(conn, reviewer_email, include_revoked = FALSE) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_list_approved_owners(conn, reviewer_email, include_revoked))
+  }
   require_main_owner(reviewer_email)
   if (isTRUE(include_revoked)) {
     return(DBI::dbGetQuery(
@@ -539,6 +599,9 @@ list_approved_owners <- function(conn, reviewer_email, include_revoked = FALSE) 
 }
 
 approve_owner_request <- function(conn, request_id, reviewer_email) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_approve_owner_request(conn, request_id, reviewer_email))
+  }
   require_main_owner(reviewer_email)
   reviewer_email <- validate_email(reviewer_email, field = "Reviewer email")
   request_id <- suppressWarnings(as.integer(request_id))
@@ -616,6 +679,9 @@ approve_owner_request <- function(conn, request_id, reviewer_email) {
 }
 
 deny_owner_request <- function(conn, request_id, reviewer_email) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_deny_owner_request(conn, request_id, reviewer_email))
+  }
   require_main_owner(reviewer_email)
   reviewer_email <- validate_email(reviewer_email, field = "Reviewer email")
   request_id <- suppressWarnings(as.integer(request_id))
@@ -640,6 +706,9 @@ deny_owner_request <- function(conn, request_id, reviewer_email) {
 }
 
 revoke_approved_owner <- function(conn, owner_id, reviewer_email) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_revoke_approved_owner(conn, owner_id, reviewer_email))
+  }
   require_main_owner(reviewer_email)
   reviewer_email <- validate_email(reviewer_email, field = "Reviewer email")
   owner_id <- suppressWarnings(as.integer(owner_id))
@@ -673,6 +742,9 @@ revoke_approved_owner <- function(conn, owner_id, reviewer_email) {
 }
 
 create_organizer_login_code <- function(conn, organizer_email, code = generate_magic_code()) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_create_organizer_login_code(conn, organizer_email, code))
+  }
   organizer_email <- validate_email(organizer_email, field = "Organizer email")
   code <- validate_magic_code(code)
   created_at <- db_now()
@@ -691,6 +763,9 @@ create_organizer_login_code <- function(conn, organizer_email, code = generate_m
 }
 
 verify_organizer_login_code <- function(conn, organizer_email, code) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_verify_organizer_login_code(conn, organizer_email, code))
+  }
   organizer_email <- validate_email(organizer_email, field = "Organizer email")
   code <- validate_magic_code(code)
   now <- db_now()
