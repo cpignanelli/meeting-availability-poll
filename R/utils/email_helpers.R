@@ -46,6 +46,52 @@ owner_access_request_email_text <- function(first_name, last_name, email) {
   )
 }
 
+email_subject_text <- function(subject, max_chars = 180) {
+  subject <- sanitize_text(subject, max_chars = max_chars, required = TRUE, field = "Email subject")
+  gsub("[\r\n\t]+", " ", subject)
+}
+
+response_notification_text <- function(type, poll_title, participant_name, link, action = "submitted") {
+  type <- sanitize_text(type, max_chars = 20, required = TRUE, field = "Notification type")
+  poll_title <- sanitize_text(poll_title, max_chars = 160, required = TRUE, field = "Poll title")
+  participant_name <- sanitize_text(participant_name, max_chars = 160, required = TRUE, field = "Participant name")
+  link <- sanitize_text(link, max_chars = 2000, required = TRUE, field = "Poll link")
+  action <- sanitize_text(action, max_chars = 20, required = TRUE, field = "Response action")
+  if (!action %in% c("submitted", "updated")) {
+    stop("Response action is invalid.", call. = FALSE)
+  }
+  if (!type %in% c("organizer", "participant")) {
+    stop("Notification type is invalid.", call. = FALSE)
+  }
+
+  if (identical(type, "organizer")) {
+    return(paste(
+      paste(participant_name, action, "availability for your meeting poll."),
+      "",
+      paste("Poll:", poll_title),
+      paste("Participant:", participant_name),
+      "",
+      "View this poll in your organizer workspace:",
+      link,
+      "",
+      "This link requires organizer sign-in. Participant emails, comments, and private admin links are not included in this message.",
+      sep = "\n"
+    ))
+  }
+
+  paste(
+    "Your availability response was saved.",
+    "",
+    paste("Poll:", poll_title),
+    "",
+    "You can return to the poll to view or edit your availability:",
+    link,
+    "",
+    "This link requires your participant email-code sign-in.",
+    sep = "\n"
+  )
+}
+
 send_magic_code_email <- function(email, code, purpose = "login", subject = "Your Meeting Availability Poll code", config = smtp_config()) {
   email <- validate_email(email, field = "Email")
   code <- validate_magic_code(code)
@@ -198,4 +244,120 @@ send_owner_access_request_email <- function(request, config = smtp_config()) {
     verbose = FALSE
   )
   list(sent = TRUE)
+}
+
+send_response_notification_email <- function(to, subject, body_text, config = smtp_config()) {
+  to <- validate_email(to, field = "Notification recipient")
+  subject <- email_subject_text(subject)
+  body_text <- sanitize_text(body_text, max_chars = 8000, required = TRUE, field = "Notification body")
+
+  sender <- getOption("meeting_poll.response_notification_sender", NULL)
+  if (is.function(sender)) {
+    sender(to = to, subject = subject, body = body_text)
+    return(list(sent = TRUE))
+  }
+
+  if (!smtp_is_configured(config)) {
+    stop("Response notifications are not configured. Set SMTP environment variables before using this feature.", call. = FALSE)
+  }
+
+  if (requireNamespace("blastula", quietly = TRUE)) {
+    email_body <- blastula::compose_email(body = blastula::md(body_text))
+    credentials <- blastula::creds_envvar(
+      user = if (nzchar(config$username)) config$username else NULL,
+      pass_envvar = "SMTP_PASSWORD",
+      host = config$host,
+      port = config$port,
+      use_ssl = config$use_ssl
+    )
+    blastula::smtp_send(
+      email = email_body,
+      from = config$from,
+      to = to,
+      subject = subject,
+      credentials = credentials
+    )
+    return(list(sent = TRUE))
+  }
+
+  if (!requireNamespace("curl", quietly = TRUE)) {
+    stop("Install the blastula or curl package to send response notification email.", call. = FALSE)
+  }
+
+  message <- paste0(
+    "To: ", to, "\r\n",
+    "From: ", config$from, "\r\n",
+    "Subject: ", subject, "\r\n",
+    "MIME-Version: 1.0\r\n",
+    "Content-Type: text/plain; charset=UTF-8\r\n\r\n",
+    body_text
+  )
+  smtp_server <- paste0(if (isTRUE(config$use_ssl)) "smtps://" else "smtp://", config$host, ":", config$port)
+  curl::send_mail(
+    mail_from = config$from,
+    mail_rcpt = to,
+    message = charToRaw(message),
+    smtp_server = smtp_server,
+    use_ssl = if (isTRUE(config$use_ssl)) "force" else "try",
+    username = if (nzchar(config$username)) config$username else NULL,
+    password = if (nzchar(config$password)) config$password else NULL,
+    verbose = FALSE
+  )
+  list(sent = TRUE)
+}
+
+send_response_submission_notifications <- function(
+  poll,
+  participant_name,
+  participant_email,
+  response_link,
+  organizer_link,
+  action = "submitted",
+  config = smtp_config()
+) {
+  poll_title <- sanitize_text(poll$title[[1]], max_chars = 160, required = TRUE, field = "Poll title")
+  organizer_email <- validate_email(poll$organizer_email[[1]], field = "Organizer email")
+  participant_email <- validate_email(participant_email, field = "Participant email")
+  participant_name <- sanitize_text(participant_name, max_chars = 160, required = TRUE, field = "Participant name")
+  action <- sanitize_text(action, max_chars = 20, required = TRUE, field = "Response action")
+
+  organizer_body <- response_notification_text(
+    type = "organizer",
+    poll_title = poll_title,
+    participant_name = participant_name,
+    link = organizer_link,
+    action = action
+  )
+  participant_body <- response_notification_text(
+    type = "participant",
+    poll_title = poll_title,
+    participant_name = participant_name,
+    link = response_link,
+    action = action
+  )
+
+  organizer_result <- tryCatch(
+    send_response_notification_email(
+      to = organizer_email,
+      subject = paste("New response for", poll_title),
+      body_text = organizer_body,
+      config = config
+    ),
+    error = function(e) e
+  )
+  participant_result <- tryCatch(
+    send_response_notification_email(
+      to = participant_email,
+      subject = paste("Your response was saved for", poll_title),
+      body_text = participant_body,
+      config = config
+    ),
+    error = function(e) e
+  )
+
+  failures <- vapply(list(organizer_result, participant_result), inherits, logical(1), what = "error")
+  if (any(failures)) {
+    stop("One or more response notification emails could not be sent.", call. = FALSE)
+  }
+  list(sent = TRUE, organizer = organizer_result, participant = participant_result)
 }

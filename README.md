@@ -80,11 +80,11 @@ install.packages(c(
 ))
 ```
 
-`blastula` is used when available for SMTP login-code email. The app can also send through `curl` when SMTP is configured. For local development without SMTP, set `ALLOW_DEV_AUTH_CODE_DISPLAY=true` to show organizer login codes on screen.
+`blastula` is used when available for SMTP login-code email and response notifications. The app can also send through `curl` when SMTP is configured. For local development without SMTP, set `ALLOW_DEV_AUTH_CODE_DISPLAY=true` to show organizer login codes on screen.
 
 `mongolite` is required only when `DATABASE_BACKEND=mongodb`, but it is included in the project dependencies so hosted deployments can switch from local SQLite to MongoDB Atlas without code changes.
 
-Owner access request notifications also use the same SMTP settings. On public deployments, configure SMTP before enabling secondary organizer requests so the main owner receives review notifications.
+Owner access request notifications and participant response notifications use the same SMTP settings. On public deployments, configure SMTP so organizers receive new-response alerts and participants receive links to return and edit availability.
 
 ## Local database setup for proof of concept
 
@@ -153,6 +153,7 @@ Generated links use query-string routing:
 - `?respond=<response_token>` for participants
 - `?admin=<admin_token>` for the organizer
 - `?organizer=login` for the email-code organizer portal
+- `?organizer=login&poll=<response_token>` for organizer email notifications that open a specific poll after sign-in
 - `?create=<POLL_CREATION_SECRET>` as a legacy/dev fallback creation route when `POLL_CREATION_SECRET` is set
 
 For link generation outside RStudio, set `APP_BASE_URL` in `.Renviron`:
@@ -248,6 +249,7 @@ Implemented in this proof of concept:
 - Organizer and participant email-code sign-ins issue signed browser-local session tokens for the configured `TRUSTED_SESSION_MINUTES` window. These tokens are revalidated by the server on restore and are cleared on sign-out, expiry, tampering, revoked organizer access, or changing participant email.
 - Organizer workspace access is restricted to the configured main owner and approved secondary owners.
 - Secondary owner access requests require first name, last name, email, email verification, and main-owner approval.
+- Response notification emails are sent after saved participant responses when SMTP is configured. Organizer notification links require organizer sign-in and do not expose private admin tokens.
 - Public response links do not expose results.
 - Private organizer links or an email-code organizer portal login are required for dashboard access.
 - Closed or expired response links show organizer contact details so participants can ask whether the link can be reopened.

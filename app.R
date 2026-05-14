@@ -67,7 +67,7 @@ server <- function(input, output, session) {
   create_poll_server("create", db)
   respond_poll_server("respond", db, token = shiny::reactive(query()[["respond"]] %||% ""))
   admin_dashboard_server("admin", db, token = shiny::reactive(query()[["admin"]] %||% ""))
-  organizer_portal_server("organizer", db)
+  organizer_portal_server("organizer", db, poll_token = shiny::reactive(query()[["poll"]] %||% ""))
 }
 
 shiny::shinyApp(ui, server)

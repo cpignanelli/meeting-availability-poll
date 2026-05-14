@@ -10,6 +10,7 @@ respond_poll_ui <- function(id) {
 respond_poll_server <- function(id, conn, token) {
   shiny::moduleServer(id, function(input, output, session) {
     submitted <- shiny::reactiveVal(FALSE)
+    notification_sent <- shiny::reactiveVal(FALSE)
     authenticated_email <- shiny::reactiveVal("")
     pending_email <- shiny::reactiveVal("")
     code_requested <- shiny::reactiveVal(FALSE)
@@ -130,7 +131,7 @@ respond_poll_server <- function(id, conn, token) {
             title = "Availability sent",
             subtitle = "Your availability has been saved. The organizer will confirm the final meeting time after reviewing responses."
           ),
-          response_success_ui(poll)
+          response_success_ui(poll, notification_sent = notification_sent())
         ))
       }
       display_status <- poll_display_status(poll, options)
@@ -308,6 +309,7 @@ respond_poll_server <- function(id, conn, token) {
       code_requested(FALSE)
       dev_code("")
       submitted(FALSE)
+      notification_sent(FALSE)
       session$sendCustomMessage("clearTrustedSession", list(scope = "participant", response_token = token()))
     })
 
@@ -351,6 +353,7 @@ respond_poll_server <- function(id, conn, token) {
         if (!nzchar(authenticated_email())) {
           stop("Sign in with your email before sending availability.", call. = FALSE)
         }
+        existing_participant <- current_participant()
         existing_values <- current_response_values()
         existing_map <- stats::setNames(as.character(existing_values$availability), as.character(existing_values$option_id))
         participant <- list(
@@ -371,8 +374,32 @@ respond_poll_server <- function(id, conn, token) {
         )
         comment <- sanitize_text(input$comments, max_chars = 2000)
         submit_poll_response(conn, poll$poll_id[[1]], participant, response_values, comment)
+        response_link <- build_app_link(session, "respond", poll$response_token[[1]])
+        organizer_link <- build_organizer_poll_link(session, poll$response_token[[1]])
+        email_sent <- tryCatch({
+          send_response_submission_notifications(
+            poll = poll,
+            participant_name = participant$name,
+            participant_email = authenticated_email(),
+            response_link = response_link,
+            organizer_link = organizer_link,
+            action = if (is.null(existing_participant)) "submitted" else "updated"
+          )
+          TRUE
+        }, error = function(e) {
+          warning(
+            paste0("Response notification email failed after response save for poll_id=", poll$poll_id[[1]]),
+            call. = FALSE
+          )
+          FALSE
+        })
+        notification_sent(email_sent)
         submitted(TRUE)
-        shiny::showNotification("Your availability has been saved.", type = "message")
+        if (isTRUE(email_sent)) {
+          shiny::showNotification("Your availability has been saved and confirmation emails were sent.", type = "message")
+        } else {
+          shiny::showNotification("Your availability was saved, but confirmation emails could not be sent.", type = "warning", duration = 8)
+        }
       }, error = function(e) {
         shiny::showNotification(safe_error_message(e), type = "error", duration = 8)
       })

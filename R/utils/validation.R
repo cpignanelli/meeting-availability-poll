@@ -139,7 +139,7 @@ parse_expected_participants <- function(text) {
   parsed[!duplicated(parsed$email), , drop = FALSE]
 }
 
-build_app_link <- function(session, parameter, token) {
+app_base_url <- function(session) {
   base_url <- Sys.getenv("APP_BASE_URL", unset = "")
   if (!nzchar(base_url)) {
     protocol <- session$clientData$url_protocol %||% "http:"
@@ -149,8 +149,33 @@ build_app_link <- function(session, parameter, token) {
     host <- if (nzchar(port)) paste0(hostname, ":", port) else hostname
     base_url <- paste0(protocol, "//", host, pathname)
   }
+  sub("/+$", "", base_url)
+}
+
+build_app_link_params <- function(session, params) {
+  if (is.null(names(params)) || any(!nzchar(names(params)))) {
+    stop("Link parameters must be named.", call. = FALSE)
+  }
+  base_url <- app_base_url(session)
+  query <- paste(
+    paste0(
+      utils::URLencode(names(params), reserved = TRUE),
+      "=",
+      utils::URLencode(as.character(params), reserved = TRUE)
+    ),
+    collapse = "&"
+  )
   separator <- if (grepl("\\?", base_url, fixed = FALSE)) "&" else "?"
-  paste0(sub("/+$", "", base_url), separator, parameter, "=", token)
+  paste0(base_url, separator, query)
+}
+
+build_app_link <- function(session, parameter, token) {
+  build_app_link_params(session, stats::setNames(list(token), parameter))
+}
+
+build_organizer_poll_link <- function(session, response_token) {
+  response_token <- validate_token(response_token, field = "Response link token")
+  build_app_link_params(session, list(organizer = "login", poll = response_token))
 }
 
 can_create_poll <- function(params, creation_secret = Sys.getenv("POLL_CREATION_SECRET", unset = "")) {

@@ -7,7 +7,7 @@ organizer_portal_ui <- function(id) {
   )
 }
 
-organizer_portal_server <- function(id, conn) {
+organizer_portal_server <- function(id, conn, poll_token = shiny::reactive("")) {
   shiny::moduleServer(id, function(input, output, session) {
     authenticated_email <- shiny::reactiveVal("")
     authenticated_role <- shiny::reactiveVal("")
@@ -20,6 +20,7 @@ organizer_portal_server <- function(id, conn) {
     access_request_dev_code <- shiny::reactiveVal("")
     access_request_submitted <- shiny::reactiveVal(FALSE)
     selected_poll_id <- shiny::reactiveVal(NULL)
+    handled_poll_token <- shiny::reactiveVal("")
     refresh_counter <- shiny::reactiveVal(0L)
     refresh <- function() refresh_counter(refresh_counter() + 1L)
 
@@ -131,7 +132,9 @@ organizer_portal_server <- function(id, conn) {
           scope = "organizer",
           token = issue_trusted_session_token("organizer", email)
         ))
-        selected_poll_id(NULL)
+        if (!nzchar(poll_token())) {
+          selected_poll_id(NULL)
+        }
         code_requested(FALSE)
         dev_code("")
         sign_in_notice("")
@@ -160,7 +163,9 @@ organizer_portal_server <- function(id, conn) {
         if (!identical(authenticated_email(), restored$email)) {
           authenticated_email(restored$email)
           authenticated_role(role)
-          selected_poll_id(NULL)
+          if (!nzchar(poll_token())) {
+            selected_poll_id(NULL)
+          }
           code_requested(FALSE)
           dev_code("")
           sign_in_notice("")
@@ -235,6 +240,30 @@ organizer_portal_server <- function(id, conn) {
       selected_poll_id(as.integer(input$view_poll))
     })
 
+    shiny::observe({
+      email <- authenticated_email()
+      token_value <- poll_token()
+      if (!nzchar(email) || !nzchar(token_value)) {
+        return()
+      }
+      request_key <- paste(email, token_value, sep = ":")
+      if (identical(handled_poll_token(), request_key)) {
+        return()
+      }
+      handled_poll_token(request_key)
+      tryCatch({
+        poll <- get_poll_for_organizer_by_response_token(conn, token_value, email)
+        if (is.null(poll)) {
+          shiny::showNotification("The requested poll was not found for this organizer account.", type = "warning", duration = 8)
+          return()
+        }
+        selected_poll_id(poll$poll_id[[1]])
+        refresh()
+      }, error = function(e) {
+        shiny::showNotification("The requested poll could not be opened.", type = "warning", duration = 8)
+      })
+    })
+
     shiny::observeEvent(input$back_to_portal, {
       selected_poll_id(NULL)
       refresh()
@@ -286,6 +315,7 @@ organizer_portal_server <- function(id, conn) {
       access_request_dev_code("")
       access_request_submitted(FALSE)
       selected_poll_id(NULL)
+      handled_poll_token("")
       session$sendCustomMessage("clearTrustedSession", list(scope = "organizer"))
     })
 

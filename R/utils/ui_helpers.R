@@ -392,7 +392,7 @@ response_contact_state_ui <- function(title, message, poll) {
   )
 }
 
-response_success_ui <- function(poll) {
+response_success_ui <- function(poll, notification_sent = FALSE) {
   shiny::div(
     class = "response-success-panel",
     response_notice_ui(
@@ -400,6 +400,13 @@ response_success_ui <- function(poll) {
       "The organizer will review all responses through their private dashboard and follow up with the final meeting time.",
       "success"
     ),
+    if (isTRUE(notification_sent)) {
+      response_notice_ui(
+        "Confirmation email sent",
+        "A copy of your response link was emailed to you so you can return and edit your availability if needed.",
+        "subtle"
+      )
+    },
     shiny::div(
       class = "response-contact-card",
       shiny::span(class = "detail-label", "Organizer"),

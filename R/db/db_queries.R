@@ -144,6 +144,14 @@ get_poll_for_organizer <- function(conn, poll_id, organizer_email) {
   if (nrow(result) == 0) NULL else result
 }
 
+get_poll_for_organizer_by_response_token <- function(conn, response_token, organizer_email) {
+  poll <- get_poll_by_response_token(conn, response_token)
+  if (is.null(poll)) {
+    return(NULL)
+  }
+  get_poll_for_organizer(conn, poll$poll_id[[1]], organizer_email)
+}
+
 list_polls_for_organizer <- function(conn, organizer_email) {
   if (is_mongo_connection(conn)) {
     return(mongo_list_polls_for_organizer(conn, organizer_email))

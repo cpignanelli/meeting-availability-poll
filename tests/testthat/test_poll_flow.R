@@ -139,6 +139,65 @@ testthat::test_that("magic code email can be mocked and dev fallback is explicit
   testthat::expect_equal(sent$code, "123456")
 })
 
+testthat::test_that("response notification emails can be mocked without private data", {
+  sent <- list()
+  old_sender <- getOption("meeting_poll.response_notification_sender", NULL)
+  options(meeting_poll.response_notification_sender = function(to, subject, body) {
+    sent[[length(sent) + 1L]] <<- list(to = to, subject = subject, body = body)
+  })
+  on.exit(options(meeting_poll.response_notification_sender = old_sender), add = TRUE)
+
+  poll <- data.frame(
+    title = "Planning meeting",
+    organizer_email = "organizer@example.org",
+    stringsAsFactors = FALSE
+  )
+  result <- send_response_submission_notifications(
+    poll = poll,
+    participant_name = "Participant Person",
+    participant_email = "Participant@Example.ORG",
+    response_link = "https://app.example/?respond=abc",
+    organizer_link = "https://app.example/?organizer=login&poll=abc",
+    action = "updated"
+  )
+
+  testthat::expect_true(result$sent)
+  testthat::expect_equal(length(sent), 2)
+  testthat::expect_equal(sent[[1]]$to, "organizer@example.org")
+  testthat::expect_equal(sent[[2]]$to, "participant@example.org")
+  testthat::expect_match(sent[[1]]$subject, "New response")
+  testthat::expect_match(sent[[2]]$subject, "Your response was saved")
+  testthat::expect_match(sent[[1]]$body, "Participant Person updated availability")
+  testthat::expect_match(sent[[1]]$body, "\\?organizer=login&poll=abc", fixed = FALSE)
+  testthat::expect_match(sent[[2]]$body, "\\?respond=abc", fixed = FALSE)
+  combined_body <- paste(vapply(sent, `[[`, character(1), "body"), collapse = "\n")
+  testthat::expect_false(grepl("admin_token|Organizer-only comment|participant@example.org", combined_body, ignore.case = TRUE))
+})
+
+testthat::test_that("organizer deep links use response tokens and ownership checks", {
+  old_base <- Sys.getenv("APP_BASE_URL", unset = NA_character_)
+  Sys.setenv(APP_BASE_URL = "https://app.example/")
+  on.exit({
+    if (is.na(old_base)) {
+      Sys.unsetenv("APP_BASE_URL")
+    } else {
+      Sys.setenv(APP_BASE_URL = old_base)
+    }
+  }, add = TRUE)
+
+  conn <- make_test_connection()
+  on.exit(close_db_connection(conn), add = TRUE)
+  result <- make_sample_poll(conn)
+  link <- build_organizer_poll_link(NULL, result$response_token)
+
+  testthat::expect_match(link, "organizer=login")
+  testthat::expect_match(link, paste0("poll=", result$response_token), fixed = TRUE)
+  owned <- get_poll_for_organizer_by_response_token(conn, result$response_token, "Organizer@Example.ORG")
+  hidden <- get_poll_for_organizer_by_response_token(conn, result$response_token, "other@example.org")
+  testthat::expect_equal(owned$poll_id[[1]], result$poll_id)
+  testthat::expect_null(hidden)
+})
+
 testthat::test_that("participant magic code verification works and prevents reuse", {
   old_secret <- Sys.getenv("APP_AUTH_SECRET", unset = NA_character_)
   Sys.setenv(APP_AUTH_SECRET = "test-participant-secret")

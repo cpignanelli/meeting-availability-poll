@@ -127,6 +127,8 @@ POLL_CREATION_SECRET=<a-long-random-secret>
 
 `APP_MAIN_OWNER_EMAIL` is required. That email receives organizer access request notifications and is the only account that can approve, deny, or revoke secondary organizer access.
 
+The same SMTP settings are used for organizer login codes, participant poll access codes, owner access request notifications, and response submission notifications. Response notification links route through normal organizer or participant email-code access; they do not bypass authentication.
+
 For local testing only, you may leave SMTP blank and set:
 
 ```text
@@ -212,6 +214,10 @@ Set `APP_BASE_URL` to the deployed app URL, then restart or republish.
 ### Organizer login does not send email
 
 Confirm that `APP_AUTH_SECRET` or `ORGANIZER_AUTH_SECRET` and all SMTP variables are set in the deployed content settings. Keep `ALLOW_DEV_AUTH_CODE_DISPLAY=false` on public deployments.
+
+### Response notification emails are not arriving
+
+Confirm the same SMTP variables are configured and that the app was restarted after saving them. Participant responses are still saved if notification delivery fails; check the app logs for a generic response-notification warning.
 
 ### Users are asked for a code after every refresh
 
