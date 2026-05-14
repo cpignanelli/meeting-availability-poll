@@ -167,14 +167,79 @@ format_readable_option_label <- function(start_datetime, end_datetime, timezone,
 
 format_readable_option_for_option <- function(option, timezone, include_year = FALSE) {
   if (is_all_day_option_label(option$display_label[[1]] %||% "")) {
-    start_date <- as.Date(format(parse_utc_timestamp(option$start_datetime[[1]]), "%Y-%m-%d", tz = timezone))
-    return(format_all_day_option_label(start_date, timezone))
+    if (is_local_midnight_all_day_interval(option$start_datetime[[1]], option$end_datetime[[1]], timezone)) {
+      start_date <- as.Date(format(parse_utc_timestamp(option$start_datetime[[1]]), "%Y-%m-%d", tz = timezone))
+      return(format_all_day_option_label(start_date, timezone))
+    }
+    return(format_readable_option_label(option$start_datetime[[1]], option$end_datetime[[1]], timezone, include_year = include_year))
   }
   format_readable_option_label(option$start_datetime[[1]], option$end_datetime[[1]], timezone, include_year = include_year)
 }
 
+is_local_midnight_all_day_interval <- function(start_datetime, end_datetime, timezone) {
+  timezone <- validate_timezone(timezone)
+  start <- parse_utc_timestamp(start_datetime)
+  end <- parse_utc_timestamp(end_datetime)
+  start_clock <- format(start, "%H:%M", tz = timezone)
+  end_clock <- format(end, "%H:%M", tz = timezone)
+  start_date <- as.Date(format(start, "%Y-%m-%d", tz = timezone))
+  end_date <- as.Date(format(end, "%Y-%m-%d", tz = timezone))
+  identical(start_clock, "00:00") && identical(end_clock, "00:00") && identical(end_date, start_date + 1L)
+}
+
 timezone_with_offset_label <- function(timezone, reference_utc = NULL) {
   validate_timezone(timezone)
+}
+
+device_timezone_choice <- function() {
+  "__device__"
+}
+
+safe_validate_timezone <- function(timezone) {
+  tryCatch(validate_timezone(timezone), error = function(e) NULL)
+}
+
+resolve_display_timezone <- function(override = NULL, detected = NULL, fallback) {
+  fallback <- validate_timezone(fallback)
+  override <- trimws(as.character(override %||% ""))
+  detected <- trimws(as.character(detected %||% ""))
+
+  if (nzchar(override) && !identical(override, device_timezone_choice())) {
+    validated_override <- safe_validate_timezone(override)
+    if (!is.null(validated_override)) {
+      return(validated_override)
+    }
+  }
+
+  validated_detected <- safe_validate_timezone(detected)
+  if (!is.null(validated_detected)) {
+    return(validated_detected)
+  }
+
+  fallback
+}
+
+display_timezone_note <- function(display_timezone, detected = NULL, fallback) {
+  fallback <- validate_timezone(fallback)
+  detected <- trimws(as.character(detected %||% ""))
+  if (!nzchar(detected)) {
+    return(paste("Using the poll time zone because your browser did not report a valid time zone:", fallback))
+  }
+  if (!identical(display_timezone, fallback)) {
+    return("")
+  }
+  if (!identical(detected, fallback) && is.null(safe_validate_timezone(detected))) {
+    return(paste("Using the poll time zone because your browser reported an unsupported time zone:", fallback))
+  }
+  ""
+}
+
+timezone_label_with_abbreviation <- function(timezone, reference_utc = NULL) {
+  timezone <- validate_timezone(timezone)
+  if (is.null(reference_utc) || !nzchar(as.character(reference_utc))) {
+    return(timezone)
+  }
+  paste0(timezone, " (", format_timezone_abbreviation(parse_utc_timestamp(reference_utc), timezone), ")")
 }
 
 format_option_label <- function(start_datetime, end_datetime, timezone) {
@@ -187,10 +252,11 @@ format_all_day_option_label <- function(date_value, timezone) {
   if (is.na(date_value)) {
     stop("Choose a valid date for each all-day option.", call. = FALSE)
   }
+  start_local <- parse_local_datetime(date_value, "00:00", timezone)
   paste0(
     format_readable_date(date_value, include_year = TRUE),
     ", All day ",
-    timezone
+    format_timezone_abbreviation(start_local, timezone)
   )
 }
 

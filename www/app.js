@@ -3,7 +3,8 @@
   var ORGANIZER_EMAIL_KEY = "meetingAvailabilityPoll.organizerEmail";
   var ORGANIZER_SESSION_KEY = "meetingAvailabilityPoll.organizerSession";
   var PARTICIPANT_SESSION_PREFIX = "meetingAvailabilityPoll.participantSession.";
-  var VIEWER_TIMEZONE_KEY = "meetingAvailabilityPoll.viewerTimezone";
+  var VIEWER_TIMEZONE_OVERRIDE_KEY = "meetingAvailabilityPoll.viewerTimezoneOverride";
+  var DEVICE_TIMEZONE_VALUE = "__device__";
   var shinyHandlersRegistered = false;
   var calendarDragState = null;
   var suppressNextSlotClick = false;
@@ -74,15 +75,28 @@
   }
 
   function detectedTimeZone() {
-    var saved = safeLocalStorageGet(VIEWER_TIMEZONE_KEY);
-    if (saved) {
-      return saved;
-    }
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
     } catch (error) {
       return "";
     }
+  }
+
+  function displayTimeZoneModuleIds() {
+    return ["respond", "admin", "organizer-embedded_admin"];
+  }
+
+  function sendDetectedTimeZoneInputs() {
+    if (!window.Shiny) {
+      return;
+    }
+    var timezone = detectedTimeZone();
+    if (!timezone) {
+      return;
+    }
+    displayTimeZoneModuleIds().forEach(function (moduleId) {
+      window.Shiny.setInputValue(moduleId + "-detected_timezone", timezone, { priority: "event" });
+    });
   }
 
   function sendRestoredSessionInputs() {
@@ -100,10 +114,31 @@
         window.Shiny.setInputValue("respond-trusted_session", participantToken, { priority: "event" });
       }
     }
-    var timezone = detectedTimeZone();
-    if (timezone) {
-      window.Shiny.setInputValue("respond-viewer_timezone", timezone, { priority: "event" });
+    sendDetectedTimeZoneInputs();
+    restoreTimezoneOverrides();
+  }
+
+  function setSelectValue(select, value) {
+    if (!select) {
+      return;
     }
+    if (select.selectize) {
+      select.selectize.setValue(value, false);
+      return;
+    }
+    select.value = value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  function restoreTimezoneOverrides() {
+    var savedOverride = safeLocalStorageGet(VIEWER_TIMEZONE_OVERRIDE_KEY) || DEVICE_TIMEZONE_VALUE;
+    document.querySelectorAll("[id$='-timezone_override']").forEach(function (select) {
+      if (select.dataset.timezoneOverrideRestored === savedOverride) {
+        return;
+      }
+      select.dataset.timezoneOverrideRestored = savedOverride;
+      setSelectValue(select, savedOverride);
+    });
   }
 
   function storeTrustedSession(message) {
@@ -535,11 +570,14 @@
         saveOrganizerDetails();
       }
     }
-    if (event.target.matches("[id$='-viewer_timezone']")) {
-      safeLocalStorageSet(VIEWER_TIMEZONE_KEY, event.target.value || "");
-      if (window.Shiny) {
-        window.Shiny.setInputValue("respond-viewer_timezone", event.target.value || "", { priority: "event" });
+    if (event.target.matches("[id$='-timezone_override']")) {
+      var value = event.target.value || DEVICE_TIMEZONE_VALUE;
+      if (value === DEVICE_TIMEZONE_VALUE) {
+        safeLocalStorageRemove(VIEWER_TIMEZONE_OVERRIDE_KEY);
+      } else {
+        safeLocalStorageSet(VIEWER_TIMEZONE_OVERRIDE_KEY, value);
       }
+      sendDetectedTimeZoneInputs();
     }
   });
 
@@ -556,5 +594,11 @@
     registerShinyHandlers();
     sendRestoredSessionInputs();
   });
+  if (window.MutationObserver) {
+    new MutationObserver(function () {
+      sendDetectedTimeZoneInputs();
+      restoreTimezoneOverrides();
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
   registerShinyHandlers();
 })();

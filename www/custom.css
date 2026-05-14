@@ -1548,6 +1548,17 @@ a {
   white-space: nowrap;
 }
 
+.dashboard-timezone-control {
+  grid-column: 1 / -1;
+  border-top: 2px solid var(--line);
+  padding-top: 10px;
+}
+
+.dashboard-timezone-control .shiny-input-container {
+  margin-bottom: 0;
+  width: 100%;
+}
+
 .portal-tabs {
   max-width: 1180px;
   margin: 0 auto;

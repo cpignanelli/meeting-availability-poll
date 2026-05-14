@@ -20,8 +20,16 @@ finalize_poll_ui <- function(id) {
   )
 }
 
-finalize_poll_server <- function(id, conn, dashboard_data, refresh) {
+finalize_poll_server <- function(id, conn, dashboard_data, refresh, display_timezone = NULL) {
   shiny::moduleServer(id, function(input, output, session) {
+    display_timezone <- display_timezone %||% shiny::reactive({
+      data <- dashboard_data()
+      if (is.null(data) || is.null(data$poll)) {
+        return("UTC")
+      }
+      data$poll$timezone[[1]]
+    })
+
     selected_option <- shiny::reactive({
       data <- dashboard_data()
       if (is.null(data) || nrow(data$options) == 0 || is.null(input$selected_option_id)) {
@@ -39,7 +47,7 @@ finalize_poll_server <- function(id, conn, dashboard_data, refresh) {
       shiny::div(
         class = "ready-box",
         shiny::strong("This poll has been finalized."),
-        option_time_ui(data$finalized, data$poll$timezone[[1]], heading = "div")
+        option_time_ui(data$finalized, display_timezone(), heading = "div")
       )
     })
 
@@ -51,7 +59,7 @@ finalize_poll_server <- function(id, conn, dashboard_data, refresh) {
       choices <- stats::setNames(
         data$options$option_id,
         vapply(seq_len(nrow(data$options)), function(i) {
-          format_readable_option_for_option(data$options[i, , drop = FALSE], data$poll$timezone[[1]])
+          format_readable_option_for_option(data$options[i, , drop = FALSE], display_timezone())
         }, character(1))
       )
       selected <- if (!is.null(data$finalized)) data$finalized$selected_option_id[[1]] else data$options$option_id[[1]]
@@ -83,7 +91,7 @@ finalize_poll_server <- function(id, conn, dashboard_data, refresh) {
       if (is.null(data) || is.null(option)) {
         return(NULL)
       }
-      text <- generate_final_email_text(data$poll, option, input$final_notes %||% "")
+      text <- generate_final_email_text(data$poll, option, input$final_notes %||% "", display_timezone = display_timezone())
       shiny::tagList(
         shiny::div(
           class = "email-preview-heading",

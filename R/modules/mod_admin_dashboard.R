@@ -69,6 +69,24 @@ admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organ
       result$data
     })
 
+    dashboard_display_timezone <- shiny::reactive({
+      data <- dashboard_data()
+      fallback <- if (!is.null(data) && !is.null(data$poll)) data$poll$timezone[[1]] else "UTC"
+      resolve_display_timezone(
+        override = input$timezone_override,
+        detected = input$detected_timezone,
+        fallback = fallback
+      )
+    })
+
+    dashboard_display_timezone_note <- shiny::reactive({
+      data <- dashboard_data()
+      if (is.null(data) || is.null(data$poll)) {
+        return("")
+      }
+      display_timezone_note(dashboard_display_timezone(), input$detected_timezone, data$poll$timezone[[1]])
+    })
+
     output$admin_page <- shiny::renderUI({
       result <- dashboard_result()
       if (isTRUE(result$error)) {
@@ -81,7 +99,13 @@ admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organ
 
       tryCatch(
         shiny::tagList(
-          dashboard_compact_header_ui(data),
+          dashboard_compact_header_ui(
+            data,
+            display_timezone = dashboard_display_timezone(),
+            ns = session$ns,
+            selected_timezone = input$timezone_override %||% device_timezone_choice(),
+            note = dashboard_display_timezone_note()
+          ),
           shiny::div(
             class = "dashboard-tabs",
             shiny::tabsetPanel(
@@ -174,7 +198,7 @@ admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organ
         shiny::div(
           class = "decision-card",
           shiny::div(class = "decision-kicker", "Top-ranked option"),
-          option_time_ui(best, data$poll$timezone[[1]], heading = "h3"),
+          option_time_ui(best, dashboard_display_timezone(), heading = "h3"),
           shiny::div(
             class = "decision-stats",
             decision_stat_ui("Score", best$availability_score[[1]], emphasis = TRUE),
@@ -227,19 +251,19 @@ admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organ
       if (is.null(data) || nrow(data$ranked) == 0) {
         return(empty_state_ui("No proposed times", "This poll does not have proposed time slots."))
       }
-      build_ranked_cards(data$ranked, nrow(data$participants), data$poll$timezone[[1]])
+      build_ranked_cards(data$ranked, nrow(data$participants), dashboard_display_timezone())
     })
 
     output$ranked_table <- DT::renderDT({
       data <- dashboard_data()
       if (is.null(data)) return(data.frame())
-      format_ranked_table(data$ranked)
+      format_ranked_table(data$ranked, dashboard_display_timezone())
     }, rownames = FALSE, escape = TRUE, options = list(pageLength = 10, scrollX = TRUE))
 
     output$responses_table <- DT::renderDT({
       data <- dashboard_data()
       if (is.null(data)) return(empty_responses_table())
-      format_responses_table(data$responses, data$poll$timezone[[1]])
+      format_responses_table(data$responses, dashboard_display_timezone())
     }, rownames = FALSE, escape = TRUE, options = list(pageLength = 10, scrollX = TRUE))
 
     output$heatmap <- shiny::renderUI({
@@ -251,7 +275,7 @@ admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organ
       if (nrow(data$participants) == 0) {
         return(empty_state_ui("No responses yet", "The heatmap will appear after participants submit availability."))
       }
-      build_heatmap_table(data$participants, data$options, data$heatmap, data$poll$timezone[[1]])
+      build_heatmap_table(data$participants, data$options, data$heatmap, dashboard_display_timezone())
     })
 
     output$missing_expected <- shiny::renderUI({
@@ -291,7 +315,7 @@ admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organ
         if (is.null(data)) {
           stop("Dashboard data is not available.", call. = FALSE)
         }
-        utils::write.csv(format_ranked_table(data$ranked), file, row.names = FALSE, na = "")
+        utils::write.csv(format_ranked_table(data$ranked, dashboard_display_timezone()), file, row.names = FALSE, na = "")
       }
     )
 
@@ -302,7 +326,7 @@ admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organ
         if (is.null(data)) {
           stop("Dashboard data is not available.", call. = FALSE)
         }
-        utils::write.csv(format_responses_table(data$responses, data$poll$timezone[[1]]), file, row.names = FALSE, na = "")
+        utils::write.csv(format_responses_table(data$responses, dashboard_display_timezone()), file, row.names = FALSE, na = "")
       }
     )
 
@@ -353,14 +377,14 @@ admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organ
       })
     })
 
-    finalize_poll_server("finalize", conn, dashboard_data, refresh)
+    finalize_poll_server("finalize", conn, dashboard_data, refresh, display_timezone = dashboard_display_timezone)
   })
 }
 
-dashboard_compact_header_ui <- function(data) {
+dashboard_compact_header_ui <- function(data, display_timezone, ns, selected_timezone = device_timezone_choice(), note = "") {
   display_status <- poll_display_status(data$poll, data$options)
   best_label <- if (!is.null(data$ranked) && nrow(data$ranked) > 0 && nrow(data$participants) > 0) {
-    format_readable_option_for_option(data$ranked[1, , drop = FALSE], data$poll$timezone[[1]])
+    format_readable_option_for_option(data$ranked[1, , drop = FALSE], display_timezone)
   } else {
     "Waiting for responses"
   }
@@ -380,7 +404,12 @@ dashboard_compact_header_ui <- function(data) {
       dashboard_compact_metric_ui("Responses", nrow(data$participants)),
       dashboard_compact_metric_ui("Options", nrow(data$options)),
       dashboard_compact_metric_ui("Expiry", format_deadline_label(poll_effective_deadline(data$poll, data$options))),
-      dashboard_compact_metric_ui("Best so far", best_label)
+      dashboard_compact_metric_ui("Best so far", best_label),
+      shiny::div(
+        class = "dashboard-timezone-control",
+        timezone_selector_ui(ns, selected = selected_timezone),
+        if (nzchar(note %||% "")) shiny::p(class = "helper-text", note)
+      )
     )
   )
 }
@@ -475,7 +504,7 @@ empty_ranked_table <- function() {
   )
 }
 
-format_ranked_table <- function(ranked) {
+format_ranked_table <- function(ranked, timezone = NULL) {
   if (is.null(ranked) || nrow(ranked) == 0) {
     return(empty_ranked_table())
   }
@@ -494,6 +523,13 @@ format_ranked_table <- function(ranked) {
   missing_columns <- setdiff(required_columns, names(ranked))
   if (length(missing_columns) > 0) {
     stop("Ranked option data is missing required columns.", call. = FALSE)
+  }
+  if (!is.null(timezone)) {
+    timezone <- validate_timezone(timezone)
+    ranked$time_option <- vapply(seq_len(nrow(ranked)), function(i) {
+      format_readable_option_for_option(ranked[i, , drop = FALSE], timezone)
+    }, character(1))
+    ranked$time_zone <- timezone
   }
   formatted <- ranked[c(
     "time_option",

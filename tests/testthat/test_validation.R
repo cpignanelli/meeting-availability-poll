@@ -57,7 +57,34 @@ testthat::test_that("readable interval helpers handle cross-day and all-day labe
   )
   testthat::expect_equal(
     format_all_day_option_label("2026-07-01", timezone),
-    "Wed, Jul 1st, 2026, All day America/Toronto"
+    "Wed, Jul 1st, 2026, All day EDT"
+  )
+})
+
+testthat::test_that("display timezone resolution prefers override, then browser detection, then poll fallback", {
+  testthat::expect_equal(
+    resolve_display_timezone(
+      override = "America/Vancouver",
+      detected = "America/Toronto",
+      fallback = "Europe/London"
+    ),
+    "America/Vancouver"
+  )
+  testthat::expect_equal(
+    resolve_display_timezone(
+      override = device_timezone_choice(),
+      detected = "America/Vancouver",
+      fallback = "America/Toronto"
+    ),
+    "America/Vancouver"
+  )
+  testthat::expect_equal(
+    resolve_display_timezone(
+      override = "",
+      detected = "Not/AZone",
+      fallback = "America/Toronto"
+    ),
+    "America/Toronto"
   )
 })
 

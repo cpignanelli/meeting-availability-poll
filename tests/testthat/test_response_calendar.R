@@ -91,6 +91,7 @@ testthat::test_that("response calendar includes read-only participant rows witho
 testthat::test_that("response board helpers summarize timed and all-day options", {
   timezone <- "America/Toronto"
   start_one <- parse_local_datetime(Sys.Date() + 3L, "09:00", timezone)
+  all_day_start <- parse_local_datetime(Sys.Date() + 3L, "00:00", timezone)
   timed_option <- data.frame(
     option_id = 101L,
     poll_id = 1L,
@@ -101,11 +102,13 @@ testthat::test_that("response board helpers summarize timed and all-day options"
     stringsAsFactors = FALSE
   )
   all_day_option <- timed_option
-  all_day_option$end_datetime <- as_utc_string(add_minutes(start_one, 1440))
+  all_day_option$start_datetime <- as_utc_string(all_day_start)
+  all_day_option$end_datetime <- as_utc_string(add_minutes(all_day_start, 1440))
   all_day_option$display_label <- "All day option"
 
   testthat::expect_match(response_board_time_label(timed_option, timezone), "9")
   testthat::expect_equal(response_board_duration_label(timed_option), "1 hour 30 minutes")
   testthat::expect_equal(response_board_time_label(all_day_option, timezone), "All day")
+  testthat::expect_false(identical(response_board_time_label(all_day_option, "America/Vancouver"), "All day"))
   testthat::expect_equal(response_board_duration_label(all_day_option), "All day")
 })

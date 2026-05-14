@@ -45,7 +45,7 @@ Wed, May 6th, 9-10 AM EDT
 America/Toronto
 ```
 
-Participant response pages detect the browser's IANA time zone and show proposed times in that time zone by default, with a manual "Times shown in" selector. The app does not request GPS/browser location permission.
+Participant response pages and organizer dashboards detect the browser's IANA time zone and show proposed times in that time zone by default, with a manual "Times shown in" selector. The app does not request GPS/browser location permission, and viewer time zones are used only for display; stored timestamps and expiry checks remain anchored to UTC and the poll time zone.
 
 ## Response link expiry and reopening
 

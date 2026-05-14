@@ -214,7 +214,8 @@ status_banner_ui <- function(status, title, message, action = NULL) {
 
 option_time_ui <- function(option, timezone, heading = "h3", show_context = TRUE) {
   primary <- format_readable_option_for_option(option, timezone)
-  context <- timezone
+  reference_utc <- if ("start_datetime" %in% names(option)) option$start_datetime[[1]] else NULL
+  context <- timezone_label_with_abbreviation(timezone, reference_utc)
   heading_tag <- shiny::tags[[heading]]
   shiny::div(
     class = "time-display",
@@ -364,6 +365,18 @@ response_privacy_callout_ui <- function() {
   )
 }
 
+timezone_selector_ui <- function(ns, input_id = "timezone_override", selected = device_timezone_choice(), label = "Times shown in") {
+  timezone_choices <- stats::setNames(OlsonNames(), OlsonNames())
+  choices <- c("Use my device time zone" = device_timezone_choice(), timezone_choices)
+  shiny::selectizeInput(
+    ns(input_id),
+    label,
+    choices = choices,
+    selected = selected %||% device_timezone_choice(),
+    options = list(maxOptions = 2000)
+  )
+}
+
 response_contact_state_ui <- function(title, message, poll) {
   shiny::div(
     class = "empty-state response-contact-state",
@@ -433,11 +446,7 @@ response_poll_detail_items <- function(poll, options = NULL, viewer_timezone = N
   }
   reference_utc <- if (!is.null(options) && nrow(options) > 0) options$start_datetime[[1]] else NULL
   viewer_timezone <- viewer_timezone %||% poll$timezone[[1]]
-  times_shown <- if (!is.null(reference_utc) && nzchar(reference_utc)) {
-    paste0(viewer_timezone, " (", format_timezone_abbreviation(parse_utc_timestamp(reference_utc), viewer_timezone), ")")
-  } else {
-    viewer_timezone
-  }
+  times_shown <- timezone_label_with_abbreviation(viewer_timezone, reference_utc)
 
   list(
     list(label = "Organizer", value = poll$organizer_name[[1]]),

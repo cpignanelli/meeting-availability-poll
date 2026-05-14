@@ -66,11 +66,22 @@ respond_poll_server <- function(id, conn, token) {
       )
     })
 
-    viewer_timezone <- shiny::reactive({
+    display_timezone <- shiny::reactive({
       bundle <- poll_bundle()
       fallback <- if (!is.null(bundle$poll)) bundle$poll$timezone[[1]] else "UTC"
-      candidate <- input$viewer_timezone %||% fallback
-      tryCatch(validate_timezone(candidate), error = function(e) fallback)
+      resolve_display_timezone(
+        override = input$timezone_override,
+        detected = input$detected_timezone,
+        fallback = fallback
+      )
+    })
+
+    display_timezone_note_text <- shiny::reactive({
+      bundle <- poll_bundle()
+      if (is.null(bundle$poll)) {
+        return("")
+      }
+      display_timezone_note(display_timezone(), input$detected_timezone, bundle$poll$timezone[[1]])
     })
 
     current_participant <- shiny::reactive({
@@ -155,6 +166,7 @@ respond_poll_server <- function(id, conn, token) {
       }
 
       if (!nzchar(authenticated_email())) {
+        timezone <- display_timezone()
         return(shiny::tagList(
           page_header_ui(
             eyebrow = "Meeting availability poll",
@@ -164,6 +176,8 @@ respond_poll_server <- function(id, conn, token) {
           participant_login_flow_ui(
             session$ns,
             poll = poll,
+            options = options,
+            timezone = timezone,
             code_requested = code_requested(),
             pending_email = pending_email(),
             dev_code = dev_code()
@@ -174,7 +188,7 @@ respond_poll_server <- function(id, conn, token) {
       participant <- current_participant()
       current_values <- current_response_values()
       visible <- participant_results()
-      timezone <- viewer_timezone()
+      timezone <- display_timezone()
       participant_name <- if (is.null(participant)) "" else participant$name[[1]] %||% ""
       participant_id <- if (is.null(participant)) NA_integer_ else participant$participant_id[[1]]
 
@@ -198,8 +212,11 @@ respond_poll_server <- function(id, conn, token) {
               class = "respond-identity-grid",
               shiny::div(class = "form-field", shiny::textInput(session$ns("name"), "Name", value = participant_name)),
               shiny::div(class = "form-field", shiny::tags$label("Email"), shiny::div(class = "locked-input", authenticated_email())),
-              shiny::div(class = "form-field", response_timezone_selector_ui(session$ns, timezone))
+              shiny::div(class = "form-field", timezone_selector_ui(session$ns, selected = input$timezone_override %||% device_timezone_choice()))
             ),
+            if (nzchar(display_timezone_note_text())) {
+              shiny::p(class = "helper-text", display_timezone_note_text())
+            },
             shiny::actionButton(session$ns("use_different_participant_email"), "Use a different email", class = "btn-outline-secondary"),
             response_privacy_callout_ui()
           ),
@@ -211,6 +228,7 @@ respond_poll_server <- function(id, conn, token) {
               session$ns,
               options,
               timezone,
+              poll_timezone = poll$timezone[[1]],
               current_values = current_values,
               visible_data = visible,
               current_participant_id = participant_id
@@ -362,7 +380,7 @@ respond_poll_server <- function(id, conn, token) {
   })
 }
 
-participant_login_flow_ui <- function(ns, poll, code_requested, pending_email, dev_code) {
+participant_login_flow_ui <- function(ns, poll, options = NULL, timezone = poll$timezone[[1]], code_requested, pending_email, dev_code) {
   if (isTRUE(code_requested)) {
     return(shiny::div(
       class = "respond-flow",
@@ -391,7 +409,7 @@ participant_login_flow_ui <- function(ns, poll, code_requested, pending_email, d
     section_panel_ui(
       "Sign in to respond",
       "Enter your email to receive a short code. This lets you edit your response later and view other participants' availability.",
-      detail_grid_ui(response_poll_detail_items(poll, NULL, poll$timezone[[1]])),
+      detail_grid_ui(response_poll_detail_items(poll, options, timezone)),
       shiny::textInput(ns("participant_email"), "Email", placeholder = "you@example.org"),
       response_notice_ui(
         "Participant visibility",
@@ -403,17 +421,7 @@ participant_login_flow_ui <- function(ns, poll, code_requested, pending_email, d
   )
 }
 
-response_timezone_selector_ui <- function(ns, timezone) {
-  shiny::selectizeInput(
-    ns("viewer_timezone"),
-    "Times shown in",
-    choices = OlsonNames(),
-    selected = timezone,
-    options = list(maxOptions = 2000)
-  )
-}
-
-build_response_calendar_ui <- function(ns, options, timezone, current_values = data.frame(), visible_data = NULL, current_participant_id = NA_integer_) {
+build_response_calendar_ui <- function(ns, options, timezone, poll_timezone = timezone, current_values = data.frame(), visible_data = NULL, current_participant_id = NA_integer_) {
   calendar <- response_calendar_data(options, timezone)
   if (nrow(calendar) == 0) {
     return(empty_state_ui("No proposed times", "This poll does not have any proposed meeting times."))
@@ -430,6 +438,7 @@ build_response_calendar_ui <- function(ns, options, timezone, current_values = d
         ns,
         week_options,
         timezone,
+        poll_timezone = poll_timezone,
         current_values = current_values,
         visible_data = visible_data,
         current_participant_id = current_participant_id
@@ -514,18 +523,18 @@ default_response_week <- function(calendar) {
   calendar$week_key[[1]]
 }
 
-response_week_calendar_ui <- function(ns, week_options, timezone, current_values = data.frame(), visible_data = NULL, current_participant_id = NA_integer_) {
+response_week_calendar_ui <- function(ns, week_options, timezone, poll_timezone = timezone, current_values = data.frame(), visible_data = NULL, current_participant_id = NA_integer_) {
   week_options <- week_options[order(week_options$start_datetime), , drop = FALSE]
   current_map <- response_value_map(current_values)
   header <- shiny::tags$tr(
     shiny::tags$th(class = "response-board-participant-header", "Participant"),
     lapply(seq_len(nrow(week_options)), function(i) {
-      response_board_option_header_ui(week_options[i, , drop = FALSE], timezone, visible_data)
+      response_board_option_header_ui(week_options[i, , drop = FALSE], timezone, visible_data, poll_timezone = poll_timezone)
     })
   )
   response_cells <- lapply(seq_len(nrow(week_options)), function(i) {
     option <- week_options[i, , drop = FALSE]
-    option_label <- paste(option$local_date_label[[1]], response_board_time_label(option, timezone))
+    option_label <- paste(option$local_date_label[[1]], response_board_time_label(option, timezone, poll_timezone = poll_timezone))
     value <- current_map[[as.character(option$option_id[[1]])]] %||% "pending"
     shiny::tags$td(
       class = "response-board-answer-cell",
@@ -564,13 +573,13 @@ response_week_calendar_ui <- function(ns, week_options, timezone, current_values
   )
 }
 
-response_board_option_header_ui <- function(option, timezone, visible_data = NULL) {
+response_board_option_header_ui <- function(option, timezone, visible_data = NULL, poll_timezone = timezone) {
   date_value <- as.Date(option$local_date[[1]])
   shiny::tags$th(
     class = "response-board-option-header",
     shiny::span(class = "response-board-favorite", "☆"),
     shiny::span(class = "response-board-date", format_readable_date(date_value, include_year = FALSE, ordinal = FALSE)),
-    shiny::span(class = "response-board-time", response_board_time_label(option, timezone)),
+    shiny::span(class = "response-board-time", response_board_time_label(option, timezone, poll_timezone = poll_timezone)),
     shiny::span(class = "response-board-duration", response_board_duration_label(option)),
     response_board_counts_ui(option$option_id[[1]], visible_data)
   )
@@ -663,8 +672,9 @@ participant_initials <- function(name) {
   toupper(substr(initials, 1, 2))
 }
 
-response_board_time_label <- function(option, timezone) {
-  if (isTRUE(response_board_is_all_day(option))) {
+response_board_time_label <- function(option, timezone, poll_timezone = timezone) {
+  if (isTRUE(response_board_is_all_day(option)) &&
+      is_local_midnight_all_day_interval(option$start_datetime[[1]], option$end_datetime[[1]], timezone)) {
     return("All day")
   }
   format_readable_time_range(option$start_datetime[[1]], option$end_datetime[[1]], timezone)

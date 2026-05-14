@@ -1,17 +1,18 @@
-generate_final_email_text <- function(poll, option, final_notes = "") {
+generate_final_email_text <- function(poll, option, final_notes = "", display_timezone = NULL) {
   location <- sanitize_text(poll$location_details[[1]] %||% "", max_chars = 1000)
   location_line <- if (nzchar(location)) paste0("\nLocation/details: ", location) else ""
   notes <- sanitize_text(final_notes %||% "", max_chars = 2000)
   notes_line <- if (nzchar(notes)) paste0("\n\nAdditional notes:\n", notes) else ""
+  display_timezone <- display_timezone %||% poll$timezone[[1]]
 
   paste0(
     "Subject: Final meeting time - ", poll$title[[1]], "\n\n",
     "Hello,\n\n",
     "Thank you for sharing your availability. The meeting has been scheduled for:\n\n",
-    format_readable_option_for_option(option, poll$timezone[[1]]),
+    format_readable_option_for_option(option, display_timezone),
     "\n",
-    "Time zone: ",
-    poll$timezone[[1]],
+    "Times shown in: ",
+    timezone_label_with_abbreviation(display_timezone, option$start_datetime[[1]]),
     "\n",
     "Duration: ", poll$duration_minutes[[1]], " minutes",
     location_line,

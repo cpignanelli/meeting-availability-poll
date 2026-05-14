@@ -124,6 +124,29 @@ testthat::test_that("dashboard formatters return stable empty tables", {
   testthat::expect_equal(nrow(response_table), 0)
 })
 
+testthat::test_that("dashboard formatters can render stored UTC options in a viewer timezone", {
+  toronto_start <- parse_local_datetime(as.Date("2026-05-15"), "09:00", "America/Toronto")
+  ranked <- data.frame(
+    time_option = "Original label",
+    time_zone = "America/Toronto",
+    start_datetime = as_utc_string(toronto_start),
+    end_datetime = as_utc_string(add_minutes(toronto_start, 60)),
+    preferred_count = 1L,
+    available_count = 0L,
+    unavailable_count = 0L,
+    missing_count = 0L,
+    availability_score = 2L,
+    required_attendee_conflicts = 0L,
+    display_label = "Original label",
+    stringsAsFactors = FALSE
+  )
+
+  formatted <- format_ranked_table(ranked, "America/Vancouver")
+
+  testthat::expect_match(formatted$`Time option`[[1]], "6-7 AM PDT")
+  testthat::expect_equal(formatted$`Time zone`[[1]], "America/Vancouver")
+})
+
 testthat::test_that("dashboard data tolerates legacy polls without options", {
   conn <- make_test_connection()
   on.exit(close_db_connection(conn), add = TRUE)
