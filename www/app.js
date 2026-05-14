@@ -12,6 +12,11 @@
   var pendingCalendarChanges = new Map();
   var pendingCalendarFlushTimer = null;
   var pendingCalendarMaxTimer = null;
+  var lastDetectedTimezoneByInput = {};
+  var displayTimezoneSyncTimer = null;
+  var lastOrganizerSessionToken = "";
+  var lastParticipantSessionKey = "";
+  var lastParticipantSessionToken = "";
   var availabilityCycleStates = ["pending", "available", "preferred", "unavailable"];
   var availabilityCycleValues = {
     pending: "",
@@ -86,7 +91,14 @@
     return ["respond", "admin", "organizer-embedded_admin"];
   }
 
-  function sendDetectedTimeZoneInputs() {
+  function displayTimeZoneModuleIsActive(moduleId) {
+    return !!(
+      document.getElementById(moduleId + "-respond_page") ||
+      document.getElementById(moduleId + "-admin_page")
+    );
+  }
+
+  function sendDetectedTimeZoneInputs(force) {
     if (!window.Shiny) {
       return;
     }
@@ -95,8 +107,27 @@
       return;
     }
     displayTimeZoneModuleIds().forEach(function (moduleId) {
-      window.Shiny.setInputValue(moduleId + "-detected_timezone", timezone, { priority: "event" });
+      if (!displayTimeZoneModuleIsActive(moduleId)) {
+        return;
+      }
+      var inputId = moduleId + "-detected_timezone";
+      if (!force && lastDetectedTimezoneByInput[inputId] === timezone) {
+        return;
+      }
+      lastDetectedTimezoneByInput[inputId] = timezone;
+      window.Shiny.setInputValue(inputId, timezone, { priority: "event" });
     });
+  }
+
+  function scheduleDisplayTimezoneSync(force) {
+    if (displayTimezoneSyncTimer) {
+      window.clearTimeout(displayTimezoneSyncTimer);
+    }
+    displayTimezoneSyncTimer = window.setTimeout(function () {
+      displayTimezoneSyncTimer = null;
+      restoreTimezoneOverrides();
+      sendDetectedTimeZoneInputs(!!force);
+    }, 80);
   }
 
   function sendRestoredSessionInputs() {
@@ -104,18 +135,21 @@
       return;
     }
     var organizerToken = safeLocalStorageGet(ORGANIZER_SESSION_KEY);
-    if (organizerToken) {
+    if (organizerToken && organizerToken !== lastOrganizerSessionToken) {
+      lastOrganizerSessionToken = organizerToken;
       window.Shiny.setInputValue("organizer-trusted_session", organizerToken, { priority: "event" });
     }
     var responseToken = currentResponseToken();
     if (responseToken) {
       var participantToken = safeLocalStorageGet(participantSessionKey(responseToken));
-      if (participantToken) {
+      var key = participantSessionKey(responseToken);
+      if (participantToken && (participantToken !== lastParticipantSessionToken || key !== lastParticipantSessionKey)) {
+        lastParticipantSessionToken = participantToken;
+        lastParticipantSessionKey = key;
         window.Shiny.setInputValue("respond-trusted_session", participantToken, { priority: "event" });
       }
     }
-    sendDetectedTimeZoneInputs();
-    restoreTimezoneOverrides();
+    scheduleDisplayTimezoneSync(false);
   }
 
   function setSelectValue(select, value) {
@@ -130,10 +164,24 @@
     select.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
+  function selectValue(select) {
+    if (!select) {
+      return "";
+    }
+    if (select.selectize) {
+      return select.selectize.getValue();
+    }
+    return select.value || "";
+  }
+
   function restoreTimezoneOverrides() {
     var savedOverride = safeLocalStorageGet(VIEWER_TIMEZONE_OVERRIDE_KEY) || DEVICE_TIMEZONE_VALUE;
     document.querySelectorAll("[id$='-timezone_override']").forEach(function (select) {
       if (select.dataset.timezoneOverrideRestored === savedOverride) {
+        return;
+      }
+      if (selectValue(select) === savedOverride) {
+        select.dataset.timezoneOverrideRestored = savedOverride;
         return;
       }
       select.dataset.timezoneOverrideRestored = savedOverride;
@@ -157,9 +205,12 @@
     var scope = message && message.scope ? message.scope : "all";
     if (scope === "organizer" || scope === "all") {
       safeLocalStorageRemove(ORGANIZER_SESSION_KEY);
+      lastOrganizerSessionToken = "";
     }
     if (scope === "participant" || scope === "all") {
       safeLocalStorageRemove(participantSessionKey(message ? message.response_token : ""));
+      lastParticipantSessionKey = "";
+      lastParticipantSessionToken = "";
     }
   }
 
@@ -577,7 +628,7 @@
       } else {
         safeLocalStorageSet(VIEWER_TIMEZONE_OVERRIDE_KEY, value);
       }
-      sendDetectedTimeZoneInputs();
+      scheduleDisplayTimezoneSync(false);
     }
   });
 
@@ -596,8 +647,7 @@
   });
   if (window.MutationObserver) {
     new MutationObserver(function () {
-      sendDetectedTimeZoneInputs();
-      restoreTimezoneOverrides();
+      scheduleDisplayTimezoneSync(false);
     }).observe(document.documentElement, { childList: true, subtree: true });
   }
   registerShinyHandlers();
