@@ -7,7 +7,7 @@ organizer_portal_ui <- function(id) {
   )
 }
 
-organizer_portal_server <- function(id, conn, poll_token = shiny::reactive("")) {
+organizer_portal_server <- function(id, conn, poll_token = shiny::reactive(""), initial_view = shiny::reactive("")) {
   shiny::moduleServer(id, function(input, output, session) {
     authenticated_email <- shiny::reactiveVal("")
     authenticated_role <- shiny::reactiveVal("")
@@ -21,6 +21,8 @@ organizer_portal_server <- function(id, conn, poll_token = shiny::reactive("")) 
     access_request_submitted <- shiny::reactiveVal(FALSE)
     selected_poll_id <- shiny::reactiveVal(NULL)
     handled_poll_token <- shiny::reactiveVal("")
+    workspace_tab <- shiny::reactiveVal("My polls")
+    handled_initial_view <- shiny::reactiveVal("")
     refresh_counter <- shiny::reactiveVal(0L)
     refresh <- function() refresh_counter(refresh_counter() + 1L)
 
@@ -74,7 +76,15 @@ organizer_portal_server <- function(id, conn, poll_token = shiny::reactive("")) 
             shiny::actionButton(session$ns("sign_out"), "Sign out", class = "btn-outline-secondary")
           )
         ),
-        organizer_workspace_tabs_ui(session$ns, conn, polls, email, authenticated_role(), session)
+        organizer_workspace_tabs_ui(
+          session$ns,
+          conn,
+          polls,
+          email,
+          authenticated_role(),
+          session,
+          selected_tab = workspace_tab()
+        )
       )
     })
 
@@ -264,6 +274,37 @@ organizer_portal_server <- function(id, conn, poll_token = shiny::reactive("")) 
       })
     })
 
+    shiny::observe({
+      email <- authenticated_email()
+      role <- authenticated_role()
+      view <- tolower(trimws(as.character(initial_view() %||% "")))
+      if (nchar(view, type = "chars") > 80) {
+        return()
+      }
+      if (!nzchar(email) || !nzchar(view)) {
+        return()
+      }
+
+      request_key <- paste(email, role, view, sep = ":")
+      if (identical(handled_initial_view(), request_key)) {
+        return()
+      }
+      handled_initial_view(request_key)
+
+      if (!identical(view, "access_requests")) {
+        return()
+      }
+
+      if (!identical(role, "main_owner")) {
+        shiny::showNotification("Only the main owner can review organizer access requests.", type = "warning", duration = 8)
+        return()
+      }
+
+      selected_poll_id(NULL)
+      workspace_tab("Access requests")
+      refresh()
+    })
+
     shiny::observeEvent(input$back_to_portal, {
       selected_poll_id(NULL)
       refresh()
@@ -316,6 +357,8 @@ organizer_portal_server <- function(id, conn, poll_token = shiny::reactive("")) 
       access_request_submitted(FALSE)
       selected_poll_id(NULL)
       handled_poll_token("")
+      workspace_tab("My polls")
+      handled_initial_view("")
       session$sendCustomMessage("clearTrustedSession", list(scope = "organizer"))
     })
 
@@ -488,7 +531,7 @@ organizer_request_access_card_ui <- function(ns, code_requested, profile, dev_co
   )
 }
 
-organizer_workspace_tabs_ui <- function(ns, conn, polls, email, role, session) {
+organizer_workspace_tabs_ui <- function(ns, conn, polls, email, role, session, selected_tab = "My polls") {
   panels <- list(
     shiny::tabPanel(
       "My polls",
@@ -512,7 +555,7 @@ organizer_workspace_tabs_ui <- function(ns, conn, polls, email, role, session) {
 
   shiny::div(
     class = "organizer-workspace-tabs",
-    do.call(shiny::tabsetPanel, c(list(type = "tabs"), panels))
+    do.call(shiny::tabsetPanel, c(list(id = ns("workspace_tab"), type = "tabs", selected = selected_tab), panels))
   )
 }
 

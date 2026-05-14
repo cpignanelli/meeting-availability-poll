@@ -125,7 +125,7 @@ POLL_CREATION_SECRET=<a-long-random-secret>
 
 `APP_BASE_URL` should be the final public app URL, including the trailing `/`. If you do not know the final URL before the first publish, add it after the app is published, then restart or republish the content.
 
-`APP_MAIN_OWNER_EMAIL` is required. That email receives organizer access request notifications and is the only account that can approve, deny, or revoke secondary organizer access.
+`APP_MAIN_OWNER_EMAIL` is required. That email receives organizer access request notifications and is the only account that can approve, deny, or revoke secondary organizer access. Request notifications include a review link that opens the authenticated Access requests tab; approval and denial still happen inside the app after main-owner sign-in.
 
 The same SMTP settings are used for organizer login codes, participant poll access codes, owner access request notifications, and response submission notifications. Response notification links route through normal organizer or participant email-code access; they do not bypass authentication.
 

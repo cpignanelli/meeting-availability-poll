@@ -62,6 +62,15 @@ testthat::test_that("verified owner request sends mocked main-owner notification
   with_owner_env({
     conn <- make_test_connection()
     on.exit(close_db_connection(conn), add = TRUE)
+    old_base_url <- Sys.getenv("APP_BASE_URL", unset = NA_character_)
+    Sys.setenv(APP_BASE_URL = "https://app.example/")
+    on.exit({
+      if (is.na(old_base_url)) {
+        Sys.unsetenv("APP_BASE_URL")
+      } else {
+        Sys.setenv(APP_BASE_URL = old_base_url)
+      }
+    }, add = TRUE)
     sent <- list(to = NULL, request = NULL)
     old_sender <- getOption("meeting_poll.owner_request_sender", NULL)
     options(meeting_poll.owner_request_sender = function(to, request) {
@@ -78,7 +87,22 @@ testthat::test_that("verified owner request sends mocked main-owner notification
     testthat::expect_true(result$sent)
     testthat::expect_equal(sent$to, "main.owner@example.org")
     testthat::expect_equal(sent$request$email, "requester@example.org")
+    testthat::expect_equal(sent$request$review_link, "https://app.example?organizer=login&view=access_requests")
   })
+})
+
+testthat::test_that("owner access request email includes review link not direct action links", {
+  body <- owner_access_request_email_text(
+    first_name = "Request",
+    last_name = "Person",
+    email = "requester@example.org",
+    review_link = "https://app.example?organizer=login&view=access_requests"
+  )
+
+  testthat::expect_match(body, "Review this request in the app", fixed = TRUE)
+  testthat::expect_match(body, "https://app.example?organizer=login&view=access_requests", fixed = TRUE)
+  testthat::expect_match(body, "requires main owner sign-in", fixed = TRUE)
+  testthat::expect_false(grepl("No action links", body, fixed = TRUE))
 })
 
 testthat::test_that("main owner can approve deny and revoke secondary owners", {

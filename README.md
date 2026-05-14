@@ -248,7 +248,7 @@ Implemented in this proof of concept:
 - Organizer portal magic codes are stored only as hashes, expire after 10 minutes, and are limited to 5 verification attempts.
 - Organizer and participant email-code sign-ins issue signed browser-local session tokens for the configured `TRUSTED_SESSION_MINUTES` window. These tokens are revalidated by the server on restore and are cleared on sign-out, expiry, tampering, revoked organizer access, or changing participant email.
 - Organizer workspace access is restricted to the configured main owner and approved secondary owners.
-- Secondary owner access requests require first name, last name, email, email verification, and main-owner approval.
+- Secondary owner access requests require first name, last name, email, email verification, and main-owner approval. Request emails include a review link that opens the authenticated Access requests tab; they do not approve or deny access directly from email.
 - Response notification emails are sent after saved participant responses when SMTP is configured. Organizer notification links require organizer sign-in and do not expose private admin tokens.
 - Public response links do not expose results.
 - Private organizer links or an email-code organizer portal login are required for dashboard access.

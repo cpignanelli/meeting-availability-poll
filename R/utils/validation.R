@@ -178,6 +178,10 @@ build_organizer_poll_link <- function(session, response_token) {
   build_app_link_params(session, list(organizer = "login", poll = response_token))
 }
 
+build_owner_access_requests_link <- function(session = NULL) {
+  build_app_link_params(session, list(organizer = "login", view = "access_requests"))
+}
+
 can_create_poll <- function(params, creation_secret = Sys.getenv("POLL_CREATION_SECRET", unset = "")) {
   if (!nzchar(creation_secret)) {
     return(FALSE)

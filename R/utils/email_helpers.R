@@ -30,18 +30,21 @@ magic_code_email_text <- function(code, purpose = "login") {
   )
 }
 
-owner_access_request_email_text <- function(first_name, last_name, email) {
+owner_access_request_email_text <- function(first_name, last_name, email, review_link) {
   first_name <- sanitize_text(first_name, max_chars = 80, required = TRUE, field = "First name")
   last_name <- sanitize_text(last_name, max_chars = 80, required = TRUE, field = "Last name")
   email <- validate_email(email, field = "Organizer email")
+  review_link <- sanitize_text(review_link, max_chars = 2000, required = TRUE, field = "Review link")
   paste(
     "A new organizer access request was submitted for Meeting Availability Poll.",
     "",
     paste("Name:", paste(first_name, last_name)),
     paste("Email:", email),
     "",
-    "Sign in to the app as the main owner to approve or deny this request.",
-    "No action links are included in this email.",
+    "Review this request in the app:",
+    review_link,
+    "",
+    "This link requires main owner sign-in before access can be approved or denied.",
     sep = "\n"
   )
 }
@@ -189,10 +192,11 @@ send_owner_access_request_email <- function(request, config = smtp_config()) {
   first_name <- sanitize_text(request$first_name[[1]], max_chars = 80, required = TRUE, field = "First name")
   last_name <- sanitize_text(request$last_name[[1]], max_chars = 80, required = TRUE, field = "Last name")
   email <- validate_email(request$email[[1]], field = "Organizer email")
+  review_link <- build_owner_access_requests_link()
 
   sender <- getOption("meeting_poll.owner_request_sender", NULL)
   if (is.function(sender)) {
-    sender(main_owner, list(first_name = first_name, last_name = last_name, email = email))
+    sender(main_owner, list(first_name = first_name, last_name = last_name, email = email, review_link = review_link))
     return(list(sent = TRUE))
   }
 
@@ -200,7 +204,7 @@ send_owner_access_request_email <- function(request, config = smtp_config()) {
     stop("Owner access request notifications are not configured. Set SMTP environment variables before using this feature.", call. = FALSE)
   }
 
-  body_text <- owner_access_request_email_text(first_name, last_name, email)
+  body_text <- owner_access_request_email_text(first_name, last_name, email, review_link)
   if (requireNamespace("blastula", quietly = TRUE)) {
     email_body <- blastula::compose_email(body = blastula::md(body_text))
     credentials <- blastula::creds_envvar(
