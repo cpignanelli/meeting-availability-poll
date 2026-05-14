@@ -84,7 +84,9 @@ In the app content settings or publish workflow, add:
 ```text
 APP_BASE_URL=https://your-connect-app.example/
 APP_MAIN_OWNER_EMAIL=owner@example.org
+APP_AUTH_SECRET=<a-long-random-secret>
 ORGANIZER_AUTH_SECRET=<a-long-random-secret>
+TRUSTED_SESSION_MINUTES=10
 SMTP_HOST=<smtp-host>
 SMTP_PORT=587
 SMTP_USERNAME=you@example.org
@@ -93,6 +95,8 @@ SMTP_FROM=you@example.org
 SMTP_USE_SSL=false
 ALLOW_DEV_AUTH_CODE_DISPLAY=false
 ```
+
+`APP_AUTH_SECRET` is preferred for new deployments. `ORGANIZER_AUTH_SECRET` can remain set for backward compatibility with older deployments.
 
 For MongoDB Atlas hosted persistence, add these variables too:
 
@@ -163,7 +167,7 @@ https://your-connect-app.example/
 3. Enter the code and open the **Create poll** tab.
 4. Create a test poll.
 5. Optionally test secondary organizer access by submitting a request from the root page with another email, then signing in as the main owner to approve it.
-6. Share only the generated public `?respond=<token>` link with participants.
+6. Share only the generated public `?respond=<token>` link with participants. Participants verify by email before submitting or editing availability.
 7. Keep the generated private `?admin=<token>` organizer link as backup access.
 
 Participants can respond through the effective expiry date. By default, that is the final proposed meeting date. If an earlier response deadline is set, that earlier date is used.
@@ -205,7 +209,7 @@ Set `APP_BASE_URL` to the deployed app URL, then restart or republish.
 
 ### Organizer login does not send email
 
-Confirm that `ORGANIZER_AUTH_SECRET` and all SMTP variables are set in the deployed content settings. Keep `ALLOW_DEV_AUTH_CODE_DISPLAY=false` on public deployments.
+Confirm that `APP_AUTH_SECRET` or `ORGANIZER_AUTH_SECRET` and all SMTP variables are set in the deployed content settings. Keep `ALLOW_DEV_AUTH_CODE_DISPLAY=false` on public deployments.
 
 ### MongoDB connection fails
 

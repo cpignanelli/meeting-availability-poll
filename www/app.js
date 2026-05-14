@@ -1,6 +1,9 @@
 (function () {
   var ORGANIZER_NAME_KEY = "meetingAvailabilityPoll.organizerName";
   var ORGANIZER_EMAIL_KEY = "meetingAvailabilityPoll.organizerEmail";
+  var ORGANIZER_SESSION_KEY = "meetingAvailabilityPoll.organizerSession";
+  var PARTICIPANT_SESSION_PREFIX = "meetingAvailabilityPoll.participantSession.";
+  var VIEWER_TIMEZONE_KEY = "meetingAvailabilityPoll.viewerTimezone";
   var shinyHandlersRegistered = false;
   var calendarDragState = null;
   var suppressNextSlotClick = false;
@@ -33,6 +36,97 @@
     preferred: "★",
     unavailable: "×"
   };
+
+  function currentResponseToken() {
+    try {
+      return new URLSearchParams(window.location.search).get("respond") || "";
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function participantSessionKey(responseToken) {
+    return PARTICIPANT_SESSION_PREFIX + (responseToken || currentResponseToken());
+  }
+
+  function safeLocalStorageGet(key) {
+    try {
+      return window.localStorage.getItem(key) || "";
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function safeLocalStorageSet(key, value) {
+    try {
+      window.localStorage.setItem(key, value || "");
+    } catch (error) {
+      // Local storage can be unavailable in strict browser privacy modes.
+    }
+  }
+
+  function safeLocalStorageRemove(key) {
+    try {
+      window.localStorage.removeItem(key);
+    } catch (error) {
+      // Ignore storage errors.
+    }
+  }
+
+  function detectedTimeZone() {
+    var saved = safeLocalStorageGet(VIEWER_TIMEZONE_KEY);
+    if (saved) {
+      return saved;
+    }
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function sendRestoredSessionInputs() {
+    if (!window.Shiny) {
+      return;
+    }
+    var organizerToken = safeLocalStorageGet(ORGANIZER_SESSION_KEY);
+    if (organizerToken) {
+      window.Shiny.setInputValue("organizer-trusted_session", organizerToken, { priority: "event" });
+    }
+    var responseToken = currentResponseToken();
+    if (responseToken) {
+      var participantToken = safeLocalStorageGet(participantSessionKey(responseToken));
+      if (participantToken) {
+        window.Shiny.setInputValue("respond-trusted_session", participantToken, { priority: "event" });
+      }
+    }
+    var timezone = detectedTimeZone();
+    if (timezone) {
+      window.Shiny.setInputValue("respond-viewer_timezone", timezone, { priority: "event" });
+    }
+  }
+
+  function storeTrustedSession(message) {
+    if (!message || !message.token || !message.scope) {
+      return;
+    }
+    if (message.scope === "organizer") {
+      safeLocalStorageSet(ORGANIZER_SESSION_KEY, message.token);
+    }
+    if (message.scope === "participant") {
+      safeLocalStorageSet(participantSessionKey(message.response_token), message.token);
+    }
+  }
+
+  function clearTrustedSession(message) {
+    var scope = message && message.scope ? message.scope : "all";
+    if (scope === "organizer" || scope === "all") {
+      safeLocalStorageRemove(ORGANIZER_SESSION_KEY);
+    }
+    if (scope === "participant" || scope === "all") {
+      safeLocalStorageRemove(participantSessionKey(message ? message.response_token : ""));
+    }
+  }
 
   function copyTextFromTarget(targetId, button) {
     var target = document.getElementById(targetId);
@@ -334,6 +428,9 @@
     window.Shiny.addCustomMessageHandler("calendarScrollToTime", function (message) {
       scheduleCalendarScrollToTime(message.container_id, message.time || "08:00");
     });
+    window.Shiny.addCustomMessageHandler("trustedSession", storeTrustedSession);
+    window.Shiny.addCustomMessageHandler("clearTrustedSession", clearTrustedSession);
+    sendRestoredSessionInputs();
   }
 
   document.addEventListener("pointerdown", function (event) {
@@ -438,13 +535,26 @@
         saveOrganizerDetails();
       }
     }
+    if (event.target.matches("[id$='-viewer_timezone']")) {
+      safeLocalStorageSet(VIEWER_TIMEZONE_KEY, event.target.value || "");
+      if (window.Shiny) {
+        window.Shiny.setInputValue("respond-viewer_timezone", event.target.value || "", { priority: "event" });
+      }
+    }
   });
 
   document.addEventListener("DOMContentLoaded", function () {
     restoreOrganizerDetails();
     registerShinyHandlers();
+    sendRestoredSessionInputs();
   });
-  document.addEventListener("shiny:bound", restoreOrganizerDetails);
-  document.addEventListener("shiny:connected", registerShinyHandlers);
+  document.addEventListener("shiny:bound", function () {
+    restoreOrganizerDetails();
+    sendRestoredSessionInputs();
+  });
+  document.addEventListener("shiny:connected", function () {
+    registerShinyHandlers();
+    sendRestoredSessionInputs();
+  });
   registerShinyHandlers();
 })();

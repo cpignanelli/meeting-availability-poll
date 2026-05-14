@@ -328,18 +328,23 @@ availability_icon <- function(value) {
   unname(icons[as.character(value)] %||% "○")
 }
 
-availability_cycle_button_ui <- function(input_id, label = "Pending") {
+availability_cycle_button_ui <- function(input_id, label = "Pending", value = "pending", readonly = FALSE) {
+  value <- as.character(value %||% "pending")
+  if (!value %in% response_availability_cycle()) {
+    value <- "pending"
+  }
   shiny::tags$button(
     type = "button",
-    class = "availability-cycle-button availability-state-pending",
-    `data-availability-cycle` = "true",
+    class = paste("availability-cycle-button", paste0("availability-state-", value), if (isTRUE(readonly)) "availability-cycle-readonly" else ""),
+    `data-availability-cycle` = if (isTRUE(readonly)) NULL else "true",
     `data-availability-input` = input_id,
-    `data-availability-value` = "",
-    `data-availability-state` = "pending",
-    `aria-label` = paste(label, "availability is pending. Activate to change response."),
-    shiny::span(class = "availability-cycle-icon", availability_icon("pending")),
-    shiny::span(class = "availability-cycle-label", "Pending"),
-    shiny::span(class = "availability-cycle-hint", availability_hint("pending"))
+    `data-availability-value` = if (identical(value, "pending")) "" else value,
+    `data-availability-state` = value,
+    disabled = if (isTRUE(readonly)) "disabled" else NULL,
+    `aria-label` = paste(label, "availability is", availability_short_label(value), if (isTRUE(readonly)) "" else "Activate to change response."),
+    shiny::span(class = "availability-cycle-icon", availability_icon(value)),
+    shiny::span(class = "availability-cycle-label", availability_short_label(value)),
+    shiny::span(class = "availability-cycle-hint", availability_hint(value))
   )
 }
 
@@ -354,7 +359,7 @@ response_notice_ui <- function(title, message, variant = "info") {
 response_privacy_callout_ui <- function() {
   response_notice_ui(
     "Your information is private to the organizer",
-    "Your name, optional email, availability, and comments are visible only through the private organizer link.",
+    "Other verified participants can see your name and availability. Your email and comments are visible only to the organizer.",
     "privacy"
   )
 }
@@ -418,7 +423,7 @@ poll_detail_items <- function(poll, options = NULL) {
   )
 }
 
-response_poll_detail_items <- function(poll, options = NULL) {
+response_poll_detail_items <- function(poll, options = NULL, viewer_timezone = NULL) {
   location <- ui_text(poll$location_details[[1]], "")
   location_type <- ui_text(poll$location_type[[1]], "")
   location_value <- if (nzchar(location)) {
@@ -427,10 +432,11 @@ response_poll_detail_items <- function(poll, options = NULL) {
     location_type
   }
   reference_utc <- if (!is.null(options) && nrow(options) > 0) options$start_datetime[[1]] else NULL
+  viewer_timezone <- viewer_timezone %||% poll$timezone[[1]]
   times_shown <- if (!is.null(reference_utc) && nzchar(reference_utc)) {
-    format_timezone_abbreviation(parse_utc_timestamp(reference_utc), poll$timezone[[1]])
+    paste0(viewer_timezone, " (", format_timezone_abbreviation(parse_utc_timestamp(reference_utc), viewer_timezone), ")")
   } else {
-    poll$timezone[[1]]
+    viewer_timezone
   }
 
   list(

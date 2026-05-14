@@ -17,9 +17,10 @@ smtp_is_configured <- function(config = smtp_config()) {
   nzchar(config$host) && nzchar(config$from)
 }
 
-magic_code_email_text <- function(code) {
+magic_code_email_text <- function(code, purpose = "login") {
+  purpose <- sanitize_text(purpose, max_chars = 80, required = FALSE, field = "Code purpose")
   paste(
-    "Your Meeting Availability Poll organizer code is:",
+    paste0("Your Meeting Availability Poll ", purpose, " code is:"),
     "",
     code,
     "",
@@ -45,8 +46,8 @@ owner_access_request_email_text <- function(first_name, last_name, email) {
   )
 }
 
-send_organizer_magic_code_email <- function(email, code, config = smtp_config()) {
-  email <- validate_email(email, field = "Organizer email")
+send_magic_code_email <- function(email, code, purpose = "login", subject = "Your Meeting Availability Poll code", config = smtp_config()) {
+  email <- validate_email(email, field = "Email")
   code <- validate_magic_code(code)
 
   sender <- getOption("meeting_poll.magic_code_sender", NULL)
@@ -59,12 +60,12 @@ send_organizer_magic_code_email <- function(email, code, config = smtp_config())
     if (allow_dev_auth_code_display()) {
       return(list(sent = FALSE, dev_code = code))
     }
-    stop("Organizer email login is not configured. Set SMTP environment variables before using this feature.", call. = FALSE)
+    stop("Email-code login is not configured. Set SMTP environment variables before using this feature.", call. = FALSE)
   }
 
   if (requireNamespace("blastula", quietly = TRUE)) {
     email_body <- blastula::compose_email(
-      body = blastula::md(magic_code_email_text(code))
+      body = blastula::md(magic_code_email_text(code, purpose = purpose))
     )
     credentials <- blastula::creds_envvar(
       user = if (nzchar(config$username)) config$username else NULL,
@@ -77,23 +78,23 @@ send_organizer_magic_code_email <- function(email, code, config = smtp_config())
       email = email_body,
       from = config$from,
       to = email,
-      subject = "Your organizer login code",
+      subject = subject,
       credentials = credentials
     )
     return(list(sent = TRUE, dev_code = ""))
   }
 
   if (!requireNamespace("curl", quietly = TRUE)) {
-    stop("Install the blastula or curl package to send organizer login email.", call. = FALSE)
+    stop("Install the blastula or curl package to send email login codes.", call. = FALSE)
   }
 
   message <- paste0(
     "To: ", email, "\r\n",
     "From: ", config$from, "\r\n",
-    "Subject: Your organizer login code\r\n",
+    "Subject: ", subject, "\r\n",
     "MIME-Version: 1.0\r\n",
     "Content-Type: text/plain; charset=UTF-8\r\n\r\n",
-    magic_code_email_text(code)
+    magic_code_email_text(code, purpose = purpose)
   )
   smtp_server <- paste0(if (isTRUE(config$use_ssl)) "smtps://" else "smtp://", config$host, ":", config$port)
   curl::send_mail(
@@ -107,6 +108,34 @@ send_organizer_magic_code_email <- function(email, code, config = smtp_config())
     verbose = FALSE
   )
   list(sent = TRUE, dev_code = "")
+}
+
+send_organizer_magic_code_email <- function(email, code, config = smtp_config()) {
+  email <- validate_email(email, field = "Organizer email")
+  send_magic_code_email(
+    email = email,
+    code = code,
+    purpose = "organizer login",
+    subject = "Your organizer login code",
+    config = config
+  )
+}
+
+send_participant_magic_code_email <- function(email, code, poll_title = "", config = smtp_config()) {
+  email <- validate_email(email, field = "Participant email")
+  poll_title <- sanitize_text(poll_title, max_chars = 160, required = FALSE, field = "Poll title")
+  purpose <- if (nzchar(poll_title)) {
+    paste("poll response for", poll_title)
+  } else {
+    "poll response"
+  }
+  send_magic_code_email(
+    email = email,
+    code = code,
+    purpose = purpose,
+    subject = "Your poll response code",
+    config = config
+  )
 }
 
 send_owner_access_request_email <- function(request, config = smtp_config()) {

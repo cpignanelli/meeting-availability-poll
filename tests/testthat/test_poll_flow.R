@@ -76,6 +76,26 @@ testthat::test_that("organizer magic code rejects expired and over-attempted cod
   testthat::expect_false(verify_organizer_login_code(conn, "organizer@example.org", "333333"))
 })
 
+testthat::test_that("trusted session tokens are scoped and expire", {
+  old_secret <- Sys.getenv("APP_AUTH_SECRET", unset = NA_character_)
+  Sys.setenv(APP_AUTH_SECRET = "test-session-secret")
+  on.exit({
+    if (is.na(old_secret)) {
+      Sys.unsetenv("APP_AUTH_SECRET")
+    } else {
+      Sys.setenv(APP_AUTH_SECRET = old_secret)
+    }
+  }, add = TRUE)
+
+  token <- issue_trusted_session_token("participant", "Person@Example.ORG", poll_id = 12L, minutes = 10L)
+  verified <- verify_trusted_session_token(token, expected_scope = "participant", poll_id = 12L)
+
+  testthat::expect_true(verified$valid)
+  testthat::expect_equal(verified$email, "person@example.org")
+  testthat::expect_false(verify_trusted_session_token(token, expected_scope = "participant", poll_id = 13L)$valid)
+  testthat::expect_false(verify_trusted_session_token(sub(".$", "0", token), expected_scope = "participant", poll_id = 12L)$valid)
+})
+
 testthat::test_that("magic code email can be mocked and dev fallback is explicit", {
   sent <- list(email = NULL, code = NULL)
   old_sender <- getOption("meeting_poll.magic_code_sender", NULL)
@@ -89,6 +109,27 @@ testthat::test_that("magic code email can be mocked and dev fallback is explicit
   testthat::expect_true(result$sent)
   testthat::expect_equal(sent$email, "organizer@example.org")
   testthat::expect_equal(sent$code, "123456")
+})
+
+testthat::test_that("participant magic code verification works and prevents reuse", {
+  old_secret <- Sys.getenv("APP_AUTH_SECRET", unset = NA_character_)
+  Sys.setenv(APP_AUTH_SECRET = "test-participant-secret")
+  on.exit({
+    if (is.na(old_secret)) {
+      Sys.unsetenv("APP_AUTH_SECRET")
+    } else {
+      Sys.setenv(APP_AUTH_SECRET = old_secret)
+    }
+  }, add = TRUE)
+
+  conn <- make_test_connection()
+  on.exit(close_db_connection(conn), add = TRUE)
+  result <- make_sample_poll(conn)
+  login <- create_participant_login_code(conn, result$poll_id, "Participant@Example.ORG", code = "456789")
+
+  testthat::expect_equal(login$email, "participant@example.org")
+  testthat::expect_true(verify_participant_login_code(conn, result$poll_id, "participant@example.org", "456789"))
+  testthat::expect_false(verify_participant_login_code(conn, result$poll_id, "participant@example.org", "456789"))
 })
 
 testthat::test_that("participant response can be submitted and updated", {
@@ -113,6 +154,42 @@ testthat::test_that("participant response can be submitted and updated", {
   testthat::expect_equal(nrow(participants), 1)
   testthat::expect_equal(nrow(responses), 2)
   testthat::expect_true(all(responses$availability == "available"))
+})
+
+testthat::test_that("participant-visible poll data excludes emails comments and anonymous legacy rows", {
+  conn <- make_test_connection()
+  on.exit(close_db_connection(conn), add = TRUE)
+  result <- make_sample_poll(conn)
+  poll <- get_poll_by_response_token(conn, result$response_token)
+  options <- get_poll_options(conn, poll$poll_id[[1]])
+  response_values <- data.frame(
+    option_id = options$option_id,
+    availability = c("preferred", "available"),
+    stringsAsFactors = FALSE
+  )
+
+  submit_poll_response(
+    conn,
+    poll$poll_id[[1]],
+    list(name = "Verified Person", email = "verified@example.org", organization = ""),
+    response_values,
+    "Organizer-only comment"
+  )
+  submit_poll_response(
+    conn,
+    poll$poll_id[[1]],
+    list(name = "Anonymous Legacy", email = "", organization = ""),
+    response_values,
+    ""
+  )
+
+  visible <- get_participant_visible_poll_data(conn, poll$poll_id[[1]])
+
+  testthat::expect_equal(nrow(visible$participants), 1)
+  testthat::expect_equal(visible$participants$name[[1]], "Verified Person")
+  testthat::expect_false("email" %in% names(visible$participants))
+  testthat::expect_false("comment" %in% names(visible$responses))
+  testthat::expect_equal(nrow(visible$responses), 2)
 })
 
 testthat::test_that("participant response can be submitted without email", {

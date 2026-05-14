@@ -50,11 +50,13 @@ organizer_portal_server <- function(id, conn) {
 
       if (!is.null(selected_poll_id())) {
         return(shiny::tagList(
-          page_header_ui(
-            eyebrow = "Organizer dashboard",
-            title = "Poll results",
-            subtitle = paste("Signed in as", email),
-            actions = shiny::actionButton(session$ns("back_to_portal"), "Back to my polls", class = "btn-outline-secondary")
+          shiny::div(
+            class = "portal-results-bar",
+            shiny::div(
+              shiny::span(class = "eyebrow", "Poll results"),
+              shiny::strong(paste("Signed in as", email))
+            ),
+            shiny::actionButton(session$ns("back_to_portal"), "Back to my polls", class = "btn-outline-secondary")
           ),
           admin_dashboard_body_ui(session$ns("embedded_admin"))
         ))
@@ -125,6 +127,10 @@ organizer_portal_server <- function(id, conn) {
 
         authenticated_email(email)
         authenticated_role(role)
+        session$sendCustomMessage("trustedSession", list(
+          scope = "organizer",
+          token = issue_trusted_session_token("organizer", email)
+        ))
         selected_poll_id(NULL)
         code_requested(FALSE)
         dev_code("")
@@ -135,6 +141,35 @@ organizer_portal_server <- function(id, conn) {
         shiny::showNotification(safe_error_message(e), type = "error", duration = 8)
       })
     })
+
+    shiny::observeEvent(input$trusted_session, {
+      tryCatch({
+        restored <- verify_trusted_session_token(input$trusted_session, expected_scope = "organizer")
+        if (!isTRUE(restored$valid)) {
+          session$sendCustomMessage("clearTrustedSession", list(scope = "organizer"))
+          return()
+        }
+        role <- get_owner_role(conn, restored$email)
+        if (!role %in% c("main_owner", "owner")) {
+          authenticated_email("")
+          authenticated_role("")
+          session$sendCustomMessage("clearTrustedSession", list(scope = "organizer"))
+          sign_in_notice(access_request_guidance_message(role))
+          return()
+        }
+        if (!identical(authenticated_email(), restored$email)) {
+          authenticated_email(restored$email)
+          authenticated_role(role)
+          selected_poll_id(NULL)
+          code_requested(FALSE)
+          dev_code("")
+          sign_in_notice("")
+          refresh()
+        }
+      }, error = function(e) {
+        session$sendCustomMessage("clearTrustedSession", list(scope = "organizer"))
+      })
+    }, ignoreInit = TRUE)
 
     shiny::observeEvent(input$resend_code, {
       code_requested(FALSE)
@@ -251,6 +286,7 @@ organizer_portal_server <- function(id, conn) {
       access_request_dev_code("")
       access_request_submitted(FALSE)
       selected_poll_id(NULL)
+      session$sendCustomMessage("clearTrustedSession", list(scope = "organizer"))
     })
 
     admin_dashboard_server(

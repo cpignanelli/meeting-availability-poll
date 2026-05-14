@@ -805,3 +805,139 @@ verify_organizer_login_code <- function(conn, organizer_email, code) {
   )
   TRUE
 }
+
+create_participant_login_code <- function(conn, poll_id, participant_email, code = generate_magic_code()) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_create_participant_login_code(conn, poll_id, participant_email, code))
+  }
+  poll_id <- suppressWarnings(as.integer(poll_id))
+  if (is.na(poll_id)) {
+    stop("Poll is invalid.", call. = FALSE)
+  }
+  participant_email <- validate_email(participant_email, field = "Participant email")
+  code <- validate_magic_code(code)
+  created_at <- db_now()
+  expires_at <- as_utc_string(add_minutes(parse_utc_timestamp(created_at), magic_code_expires_minutes()))
+  code_hash <- hash_magic_code(participant_email, code)
+
+  DBI::dbExecute(
+    conn,
+    "INSERT INTO participant_login_codes (
+      poll_id, participant_email_normalized, code_hash, created_at, expires_at, used_at, attempts
+    ) VALUES (?, ?, ?, ?, ?, NULL, 0)",
+    params = list(poll_id, participant_email, code_hash, created_at, expires_at)
+  )
+
+  list(poll_id = poll_id, email = participant_email, code = code, expires_at = expires_at)
+}
+
+verify_participant_login_code <- function(conn, poll_id, participant_email, code) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_verify_participant_login_code(conn, poll_id, participant_email, code))
+  }
+  poll_id <- suppressWarnings(as.integer(poll_id))
+  if (is.na(poll_id)) {
+    stop("Poll is invalid.", call. = FALSE)
+  }
+  participant_email <- validate_email(participant_email, field = "Participant email")
+  code <- validate_magic_code(code)
+  now <- db_now()
+
+  codes <- DBI::dbGetQuery(
+    conn,
+    "SELECT * FROM participant_login_codes
+     WHERE poll_id = ? AND participant_email_normalized = ? AND used_at IS NULL
+     ORDER BY created_at DESC
+     LIMIT 1",
+    params = list(poll_id, participant_email)
+  )
+  if (nrow(codes) == 0) {
+    return(FALSE)
+  }
+
+  row <- codes[1, , drop = FALSE]
+  if (parse_utc_timestamp(row$expires_at[[1]]) < parse_utc_timestamp(now) ||
+      as.integer(row$attempts[[1]]) >= magic_code_max_attempts()) {
+    return(FALSE)
+  }
+
+  supplied_hash <- hash_magic_code(participant_email, code)
+  if (!identical(supplied_hash, row$code_hash[[1]])) {
+    DBI::dbExecute(
+      conn,
+      "UPDATE participant_login_codes SET attempts = attempts + 1 WHERE participant_login_code_id = ?",
+      params = list(row$participant_login_code_id[[1]])
+    )
+    return(FALSE)
+  }
+
+  DBI::dbExecute(
+    conn,
+    "UPDATE participant_login_codes SET used_at = ? WHERE participant_login_code_id = ?",
+    params = list(now, row$participant_login_code_id[[1]])
+  )
+  TRUE
+}
+
+get_participant_by_email <- function(conn, poll_id, participant_email) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_get_participant_by_email(conn, poll_id, participant_email))
+  }
+  poll_id <- suppressWarnings(as.integer(poll_id))
+  participant_email <- validate_email(participant_email, field = "Participant email")
+  result <- DBI::dbGetQuery(
+    conn,
+    "SELECT * FROM participants
+     WHERE poll_id = ? AND email = ?
+     LIMIT 1",
+    params = list(poll_id, participant_email)
+  )
+  if (nrow(result) == 0) NULL else result
+}
+
+get_participant_response_values <- function(conn, participant_id) {
+  if (is_mongo_connection(conn)) {
+    return(mongo_get_participant_response_values(conn, participant_id))
+  }
+  participant_id <- suppressWarnings(as.integer(participant_id))
+  if (is.na(participant_id)) {
+    return(data.frame(option_id = integer(), availability = character(), stringsAsFactors = FALSE))
+  }
+  DBI::dbGetQuery(
+    conn,
+    "SELECT option_id, availability
+     FROM responses
+     WHERE participant_id = ?
+     ORDER BY option_id",
+    params = list(participant_id)
+  )
+}
+
+get_participant_visible_poll_data <- function(conn, poll_id) {
+  participants <- get_participants(conn, poll_id)
+  responses <- get_responses_for_poll(conn, poll_id)
+
+  if (nrow(participants) == 0) {
+    participants <- data.frame(
+      participant_id = integer(),
+      name = character(),
+      submitted_at = character(),
+      updated_at = character(),
+      stringsAsFactors = FALSE
+    )
+  } else {
+    participants$email <- participants$email %||% character(nrow(participants))
+    verified <- !is.na(participants$email) & nzchar(trimws(participants$email))
+    participants <- participants[verified, , drop = FALSE]
+    participants <- participants[, intersect(c("participant_id", "name", "submitted_at", "updated_at"), names(participants)), drop = FALSE]
+  }
+
+  if (nrow(responses) == 0 || nrow(participants) == 0) {
+    responses <- data.frame(participant_id = integer(), option_id = integer(), availability = character(), stringsAsFactors = FALSE)
+  } else {
+    responses <- responses[responses$participant_id %in% participants$participant_id, , drop = FALSE]
+    responses <- responses[, intersect(c("participant_id", "option_id", "availability"), names(responses)), drop = FALSE]
+  }
+
+  list(participants = participants, responses = responses)
+}

@@ -81,15 +81,7 @@ admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organ
 
       tryCatch(
         shiny::tagList(
-          page_header_ui(
-            eyebrow = "Organizer dashboard",
-            title = data$poll$title[[1]],
-            subtitle = data$poll$description[[1]],
-            meta = shiny::tagList(
-              status_pill_ui(poll_display_status(data$poll, data$options)),
-              detail_grid_ui(poll_detail_items(data$poll, data$options))
-            )
-          ),
+          dashboard_compact_header_ui(data),
           shiny::div(
             class = "dashboard-tabs",
             shiny::tabsetPanel(
@@ -363,6 +355,42 @@ admin_dashboard_server <- function(id, conn, token = NULL, poll_id = NULL, organ
 
     finalize_poll_server("finalize", conn, dashboard_data, refresh)
   })
+}
+
+dashboard_compact_header_ui <- function(data) {
+  display_status <- poll_display_status(data$poll, data$options)
+  best_label <- if (!is.null(data$ranked) && nrow(data$ranked) > 0 && nrow(data$participants) > 0) {
+    format_readable_option_for_option(data$ranked[1, , drop = FALSE], data$poll$timezone[[1]])
+  } else {
+    "Waiting for responses"
+  }
+  shiny::div(
+    class = "dashboard-compact-header",
+    shiny::div(
+      class = "dashboard-compact-title",
+      shiny::span(class = "eyebrow", "Organizer dashboard"),
+      shiny::h1(data$poll$title[[1]]),
+      if (nzchar(ui_text(data$poll$description[[1]], ""))) {
+        shiny::p(class = "page-subtitle", data$poll$description[[1]])
+      }
+    ),
+    shiny::div(
+      class = "dashboard-compact-meta",
+      status_pill_ui(display_status, poll_display_status_label(display_status)),
+      dashboard_compact_metric_ui("Responses", nrow(data$participants)),
+      dashboard_compact_metric_ui("Options", nrow(data$options)),
+      dashboard_compact_metric_ui("Expiry", format_deadline_label(poll_effective_deadline(data$poll, data$options))),
+      dashboard_compact_metric_ui("Best so far", best_label)
+    )
+  )
+}
+
+dashboard_compact_metric_ui <- function(label, value) {
+  shiny::div(
+    class = "dashboard-compact-metric",
+    shiny::span(label),
+    shiny::strong(ui_text(value, "Not available"))
+  )
 }
 
 response_link_status_message <- function(poll, options, display_status) {

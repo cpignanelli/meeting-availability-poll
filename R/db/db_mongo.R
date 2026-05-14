@@ -8,6 +8,7 @@ mongo_collections <- function() {
     "finalized_meetings",
     "audit_log",
     "organizer_login_codes",
+    "participant_login_codes",
     "owner_access_requests",
     "approved_owners",
     "counters"
@@ -178,6 +179,13 @@ mongo_login_code_columns <- function() {
   )
 }
 
+mongo_participant_login_code_columns <- function() {
+  c(
+    "participant_login_code_id", "poll_id", "participant_email_normalized",
+    "code_hash", "created_at", "expires_at", "used_at", "attempts"
+  )
+}
+
 mongo_find <- function(conn, collection, query = list(), sort = list(), limit = 0) {
   mongo_collection(conn, collection)$find(
     query = mongo_json(query),
@@ -239,6 +247,7 @@ initialize_mongo_database <- function(conn) {
     finalized_meetings = list("poll_id"),
     audit_log = list("poll_id"),
     organizer_login_codes = list(c("organizer_email_normalized", "created_at")),
+    participant_login_codes = list(c("poll_id", "participant_email_normalized", "created_at")),
     owner_access_requests = list("email_normalized", c("status", "requested_at")),
     approved_owners = list("email_normalized", c("status", "approved_at"))
   )
@@ -545,6 +554,108 @@ mongo_submit_poll_response <- function(conn, poll_id, participant, response_valu
 
   mongo_audit_event(conn, poll_id, "response_submitted", "Participant response submitted")
   participant_id
+}
+
+mongo_get_participant_by_email <- function(conn, poll_id, participant_email) {
+  participant_email <- validate_email(participant_email, field = "Participant email")
+  poll_id <- suppressWarnings(as.integer(poll_id))
+  if (is.na(poll_id)) {
+    return(NULL)
+  }
+  mongo_find_one(
+    conn,
+    "participants",
+    query = list(poll_id = poll_id, email = participant_email),
+    columns = mongo_participant_columns(),
+    integer_columns = c("participant_id", "poll_id")
+  )
+}
+
+mongo_get_participant_response_values <- function(conn, participant_id) {
+  participant_id <- suppressWarnings(as.integer(participant_id))
+  if (is.na(participant_id)) {
+    return(mongo_empty_frame(c("option_id", "availability"), "option_id"))
+  }
+  responses <- mongo_find(
+    conn,
+    "responses",
+    query = list(participant_id = participant_id),
+    sort = list(option_id = 1L)
+  )
+  responses <- mongo_normalize_frame(responses, mongo_response_columns(), c("response_id", "participant_id", "option_id"))
+  if (nrow(responses) == 0) {
+    return(mongo_empty_frame(c("option_id", "availability"), "option_id"))
+  }
+  responses[, c("option_id", "availability"), drop = FALSE]
+}
+
+mongo_create_participant_login_code <- function(conn, poll_id, participant_email, code = generate_magic_code()) {
+  poll_id <- suppressWarnings(as.integer(poll_id))
+  if (is.na(poll_id)) {
+    stop("Poll is invalid.", call. = FALSE)
+  }
+  participant_email <- validate_email(participant_email, field = "Participant email")
+  code <- validate_magic_code(code)
+  created_at <- db_now()
+  expires_at <- as_utc_string(add_minutes(parse_utc_timestamp(created_at), magic_code_expires_minutes()))
+  mongo_insert_one(conn, "participant_login_codes", list(
+    participant_login_code_id = mongo_next_id(conn, "participant_login_code_id"),
+    poll_id = poll_id,
+    participant_email_normalized = participant_email,
+    code_hash = hash_magic_code(participant_email, code),
+    created_at = created_at,
+    expires_at = expires_at,
+    used_at = "",
+    attempts = 0L
+  ))
+  list(poll_id = poll_id, email = participant_email, code = code, expires_at = expires_at)
+}
+
+mongo_verify_participant_login_code <- function(conn, poll_id, participant_email, code) {
+  poll_id <- suppressWarnings(as.integer(poll_id))
+  if (is.na(poll_id)) {
+    stop("Poll is invalid.", call. = FALSE)
+  }
+  participant_email <- validate_email(participant_email, field = "Participant email")
+  code <- validate_magic_code(code)
+  now <- db_now()
+  codes <- mongo_find(
+    conn,
+    "participant_login_codes",
+    query = list(poll_id = poll_id, participant_email_normalized = participant_email, used_at = ""),
+    sort = list(created_at = -1L),
+    limit = 1
+  )
+  codes <- mongo_normalize_frame(
+    codes,
+    mongo_participant_login_code_columns(),
+    c("participant_login_code_id", "poll_id", "attempts")
+  )
+  if (nrow(codes) == 0) {
+    return(FALSE)
+  }
+  row <- codes[1, , drop = FALSE]
+  if (parse_utc_timestamp(row$expires_at[[1]]) < parse_utc_timestamp(now) ||
+      as.integer(row$attempts[[1]]) >= magic_code_max_attempts()) {
+    return(FALSE)
+  }
+  supplied_hash <- hash_magic_code(participant_email, code)
+  if (!identical(supplied_hash, row$code_hash[[1]])) {
+    mongo_update_one(
+      conn,
+      "participant_login_codes",
+      list(participant_login_code_id = row$participant_login_code_id[[1]]),
+      list(attempts = as.integer(row$attempts[[1]]) + 1L)
+    )
+    return(FALSE)
+  }
+  mongo_update_one(
+    conn,
+    "participant_login_codes",
+    list(participant_login_code_id = row$participant_login_code_id[[1]]),
+    list(used_at = now)
+  )
+  TRUE
 }
 
 mongo_finalize_meeting <- function(conn, poll_id, selected_option_id, final_notes = "") {

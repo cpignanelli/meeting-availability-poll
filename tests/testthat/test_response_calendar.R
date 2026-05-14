@@ -22,6 +22,25 @@ testthat::test_that("response calendar data groups options by local week and kee
   testthat::expect_match(default_response_week(calendar), "^week_")
 })
 
+testthat::test_that("response calendar can render a viewer-local timezone", {
+  start_toronto <- parse_local_datetime(as.Date("2026-05-15"), "09:00", "America/Toronto")
+  options <- data.frame(
+    option_id = 101L,
+    poll_id = 1L,
+    start_datetime = as_utc_string(start_toronto),
+    end_datetime = as_utc_string(add_minutes(start_toronto, 60)),
+    display_label = "Option 1",
+    option_order = 1L,
+    stringsAsFactors = FALSE
+  )
+
+  calendar <- response_calendar_data(options, "America/Vancouver")
+
+  testthat::expect_equal(calendar$local_time[[1]], "06:00")
+  testthat::expect_equal(calendar$timezone_label[[1]], "PDT")
+  testthat::expect_match(response_board_time_label(calendar[1, , drop = FALSE], "America/Vancouver"), "6")
+})
+
 testthat::test_that("response calendar renders one input per proposed option", {
   timezone <- "America/Toronto"
   start_one <- parse_local_datetime(Sys.Date() + 3L, "09:00", timezone)
@@ -43,6 +62,30 @@ testthat::test_that("response calendar renders one input per proposed option", {
   testthat::expect_true(grepl("Preferred", html, fixed = TRUE))
   testthat::expect_true(grepl("Available", html, fixed = TRUE))
   testthat::expect_true(grepl("Unavailable", html, fixed = TRUE))
+})
+
+testthat::test_that("response calendar includes read-only participant rows without private fields", {
+  timezone <- "America/Toronto"
+  start_one <- parse_local_datetime(Sys.Date() + 3L, "09:00", timezone)
+  options <- data.frame(
+    option_id = 101L,
+    poll_id = 1L,
+    start_datetime = as_utc_string(start_one),
+    end_datetime = as_utc_string(add_minutes(start_one, 60)),
+    display_label = "Option 1",
+    option_order = 1L,
+    stringsAsFactors = FALSE
+  )
+  visible <- list(
+    participants = data.frame(participant_id = 2L, name = "Alex Lee", submitted_at = "", updated_at = "", stringsAsFactors = FALSE),
+    responses = data.frame(participant_id = 2L, option_id = 101L, availability = "available", stringsAsFactors = FALSE)
+  )
+
+  html <- as.character(build_response_calendar_ui(shiny::NS("respond"), options, timezone, visible_data = visible))
+
+  testthat::expect_true(grepl("Alex Lee", html, fixed = TRUE))
+  testthat::expect_true(grepl("availability-cycle-readonly", html, fixed = TRUE))
+  testthat::expect_false(grepl("@", html, fixed = TRUE))
 })
 
 testthat::test_that("response board helpers summarize timed and all-day options", {

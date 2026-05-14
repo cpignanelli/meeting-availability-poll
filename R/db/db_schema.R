@@ -86,6 +86,17 @@ schema_statements <- function() {
       used_at TEXT,
       attempts INTEGER NOT NULL DEFAULT 0
     )",
+    "CREATE TABLE IF NOT EXISTS participant_login_codes (
+      participant_login_code_id INTEGER PRIMARY KEY AUTOINCREMENT,
+      poll_id INTEGER NOT NULL,
+      participant_email_normalized TEXT NOT NULL,
+      code_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (poll_id) REFERENCES polls(poll_id) ON DELETE CASCADE
+    )",
     "CREATE TABLE IF NOT EXISTS owner_access_requests (
       request_id INTEGER PRIMARY KEY AUTOINCREMENT,
       first_name TEXT NOT NULL,
@@ -121,6 +132,7 @@ schema_statements <- function() {
     "CREATE INDEX IF NOT EXISTS idx_responses_option_id ON responses(option_id)",
     "CREATE INDEX IF NOT EXISTS idx_audit_poll_id ON audit_log(poll_id)",
     "CREATE INDEX IF NOT EXISTS idx_login_codes_email_created ON organizer_login_codes(organizer_email_normalized, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_participant_login_codes_poll_email_created ON participant_login_codes(poll_id, participant_email_normalized, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_owner_access_requests_email ON owner_access_requests(email_normalized)",
     "CREATE INDEX IF NOT EXISTS idx_owner_access_requests_status ON owner_access_requests(status, requested_at)",
     "CREATE INDEX IF NOT EXISTS idx_approved_owners_email ON approved_owners(email_normalized)",

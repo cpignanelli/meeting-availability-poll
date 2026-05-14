@@ -14,6 +14,7 @@ testthat::test_that("database initialization creates required tables idempotentl
     "finalized_meetings",
     "audit_log",
     "organizer_login_codes",
+    "participant_login_codes",
     "owner_access_requests",
     "approved_owners"
   ) %in% tables))

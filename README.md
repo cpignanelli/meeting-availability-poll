@@ -14,7 +14,7 @@ Keep real secret values only in Posit Connect Cloud environment variables. Do no
 2. The app generates two links:
    - Public response link: `?respond=<token>`
    - Private organizer link: `?admin=<token>`
-3. Participants submit name, optional email, availability for each option, and optional comments through a compact Doodle-like availability board.
+3. Participants open the public link, verify their email with a 6-digit code, submit name, availability for each option, and optional organizer-only comments through a compact Doodle-like availability board.
 4. The organizer reviews a decision-focused dashboard through the signed-in workspace or a private admin link.
 5. The organizer selects the final time, generates copy-ready final email text, optionally downloads an `.ics` file, and closes the poll.
 
@@ -27,13 +27,14 @@ The app uses a minimal white interface with near-black text and restrained cardi
 The public participant page is intentionally simple:
 
 - meeting summary first;
-- privacy notice before data entry;
+- email-code access before response entry;
 - a compact availability board showing only the dates and times proposed by the organizer;
+- verified participants can see other participants' names and availability, but not emails or comments;
 - explicit labels for "Preferred", "Available", and "Unavailable";
 - clear messaging that final meeting confirmation will follow from the organizer;
-- no public access to results, expected participant lists, or organizer-only details.
+- no public access to admin results, expected participant lists, private links, or organizer-only details.
 
-The organizer dashboard is optimized for deciding quickly: the overview shows the best-ranked option, response progress, response-link status, shareable participant link, ranked options, heatmap, exports, and finalization controls. The app root URL opens the organizer workspace with "My polls" and "Create poll" tabs. The main owner also sees "Access requests" and "Approved owners" tabs.
+The organizer dashboard is optimized for deciding quickly: the overview shows a compact poll header, best-ranked option, response progress, response-link status, shareable participant link, ranked options, availability board, exports, and finalization controls. The app root URL opens the organizer workspace with "My polls" and "Create poll" tabs. The main owner also sees "Access requests" and "Approved owners" tabs.
 
 ## Date, time, and time zones
 
@@ -44,7 +45,7 @@ Wed, May 6th, 9-10 AM EDT
 America/Toronto
 ```
 
-This avoids ambiguous numeric formats such as `05/06/2026` while keeping the interface easy to read for participants in different regions.
+Participant response pages detect the browser's IANA time zone and show proposed times in that time zone by default, with a manual "Times shown in" selector. The app does not request GPS/browser location permission.
 
 ## Response link expiry and reopening
 
@@ -160,12 +161,14 @@ For link generation outside RStudio, set `APP_BASE_URL` in `.Renviron`:
 APP_BASE_URL=https://your-app.example.com
 DATABASE_BACKEND=sqlite
 SQLITE_DB_PATH=data/app.sqlite
+APP_AUTH_SECRET=replace-with-a-long-random-value
 ORGANIZER_AUTH_SECRET=replace-with-a-long-random-value
+TRUSTED_SESSION_MINUTES=10
 ```
 
 Use `.Renviron.example` as a template. Do not commit `.Renviron`.
 
-The app root URL `/` opens the organizer email-code workspace. Poll creation in the normal workflow requires successful organizer login. The `?create=` URL remains available only as a hidden fallback/dev route.
+The app root URL `/` opens the organizer email-code workspace. Poll creation in the normal workflow requires successful organizer login. A short-lived signed browser session avoids repeated codes after quick refreshes. The `?create=` URL remains available only as a hidden fallback/dev route.
 
 ## Sharing a live proof of concept
 
@@ -235,7 +238,7 @@ All Shiny modules call the query layer in `R/db/db_queries.R`; raw SQL is not sc
 
 ## Security and privacy
 
-Treat all names, optional emails, comments, and availability data as sensitive personal information.
+Treat all names, emails, comments, and availability data as sensitive personal information.
 
 Implemented in this proof of concept:
 
@@ -338,7 +341,9 @@ data/app.sqlite
 
 ```text
 APP_MAIN_OWNER_EMAIL=owner@example.org
+APP_AUTH_SECRET=<a-different-private-random-secret>
 ORGANIZER_AUTH_SECRET=<a-different-private-random-secret>
+TRUSTED_SESSION_MINUTES=10
 SMTP_HOST=smtp.example.org
 SMTP_PORT=587
 SMTP_USERNAME=you@example.org
@@ -455,7 +460,9 @@ In the deployed content settings:
 
 ```text
 APP_MAIN_OWNER_EMAIL=owner@example.org
+APP_AUTH_SECRET=replace-with-a-long-random-value
 ORGANIZER_AUTH_SECRET=replace-with-a-long-random-value
+TRUSTED_SESSION_MINUTES=10
 SMTP_HOST=smtp.example.org
 SMTP_PORT=587
 SMTP_USERNAME=you@example.org
@@ -549,7 +556,10 @@ Current tests cover:
 - Local SQLite initialization
 - Poll creation and token lookup
 - Token generation and hashing
-- Participant response submission and update
+- Participant email-code access, response submission, and update
+- Trusted browser session token validation
+- Participant-visible response privacy
+- Viewer-local time-zone rendering
 - Availability scoring and ranking
 - Final meeting selection
 - Input validation
@@ -557,10 +567,10 @@ Current tests cover:
 ## Known limitations
 
 - SQLite is suitable for local proof of concept only.
-- Admin links are the only organizer authentication mechanism in v1.
-- No automated emails are sent.
+- Organizer access uses email-code login plus owner approval; private admin links remain as backup access.
+- SMTP email is required for public organizer and participant code delivery.
 - No calendar integrations are implemented.
-- Participant response edit links are not implemented; resubmission replaces the previous response only when the participant provides the same email.
+- Participant response editing requires email-code verification for the poll.
 - Rate limiting is documented but not implemented in app code.
 
 ## Future enhancements
@@ -569,7 +579,7 @@ Current tests cover:
 - Automated final email notifications.
 - Outlook or Google calendar invite generation, if explicitly configured by the app owner.
 - Poll expiration automation.
-- Participant response edit links.
+- Longer-lived participant accounts.
 - Admin authentication with organization login.
 - Role-based access control.
 - Automatic deletion or anonymization after a retention period.
