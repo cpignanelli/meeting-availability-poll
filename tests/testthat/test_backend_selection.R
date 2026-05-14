@@ -70,3 +70,8 @@ testthat::test_that("DATABASE_URL is not silently accepted in SQLite mode", {
     )
   )
 })
+
+testthat::test_that("MongoDB JSON helper emits empty objects for empty query values", {
+  testthat::expect_equal(as.character(mongo_json(list())), "{}")
+  testthat::expect_equal(as.character(mongo_json(list(response_token = "abc"))), "{\"response_token\":\"abc\"}")
+})

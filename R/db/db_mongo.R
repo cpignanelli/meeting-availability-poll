@@ -75,6 +75,9 @@ close_mongo_connection <- function(conn) {
 }
 
 mongo_json <- function(value = list()) {
+  if (is.list(value) && length(value) == 0) {
+    return("{}")
+  }
   jsonlite::toJSON(value, auto_unbox = TRUE, null = "null", POSIXt = "ISO8601")
 }
 
