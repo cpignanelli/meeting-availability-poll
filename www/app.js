@@ -104,6 +104,62 @@
     }
   }
 
+  function cookieName(key) {
+    return encodeURIComponent(key);
+  }
+
+  function cookieIsSecure() {
+    return window.location.protocol === "https:";
+  }
+
+  function safeCookieGet(key) {
+    try {
+      var name = cookieName(key) + "=";
+      var parts = document.cookie ? document.cookie.split(";") : [];
+      for (var i = 0; i < parts.length; i += 1) {
+        var part = parts[i].trim();
+        if (part.indexOf(name) === 0) {
+          return decodeURIComponent(part.substring(name.length));
+        }
+      }
+    } catch (error) {
+      return "";
+    }
+    return "";
+  }
+
+  function safeCookieSet(key, value) {
+    try {
+      var secure = cookieIsSecure() ? "; Secure" : "";
+      document.cookie = cookieName(key) + "=" + encodeURIComponent(value || "") + "; Max-Age=3600; Path=/; SameSite=Lax" + secure;
+    } catch (error) {
+      // Cookies are a fallback for browsers that restrict localStorage.
+    }
+  }
+
+  function safeCookieRemove(key) {
+    try {
+      var secure = cookieIsSecure() ? "; Secure" : "";
+      document.cookie = cookieName(key) + "=; Max-Age=0; Path=/; SameSite=Lax" + secure;
+    } catch (error) {
+      // Ignore cookie removal errors.
+    }
+  }
+
+  function safeStorageGet(key) {
+    return safeLocalStorageGet(key) || safeCookieGet(key);
+  }
+
+  function safeStorageSet(key, value) {
+    safeLocalStorageSet(key, value);
+    safeCookieSet(key, value);
+  }
+
+  function safeStorageRemove(key) {
+    safeLocalStorageRemove(key);
+    safeCookieRemove(key);
+  }
+
   function detectedTimeZone() {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone || "";
@@ -189,12 +245,12 @@
   }
 
   function restoredTokenFromStorage(key) {
-    var token = safeLocalStorageGet(key);
+    var token = safeStorageGet(key);
     if (!token) {
       return "";
     }
     if (sessionTokenIsExpired(token)) {
-      safeLocalStorageRemove(key);
+      safeStorageRemove(key);
       return "";
     }
     return token;
@@ -202,17 +258,28 @@
 
   function clearParticipantSessions(responseToken) {
     if (responseToken) {
-      safeLocalStorageRemove(participantSessionKey(responseToken));
+      safeStorageRemove(participantSessionKey(responseToken));
       return;
     }
     try {
       Object.keys(window.localStorage).forEach(function (key) {
         if (key.indexOf(PARTICIPANT_SESSION_PREFIX) === 0) {
-          window.localStorage.removeItem(key);
+          safeStorageRemove(key);
         }
       });
     } catch (error) {
-      safeLocalStorageRemove(participantSessionKey(""));
+      safeStorageRemove(participantSessionKey(""));
+    }
+    try {
+      var encodedPrefix = cookieName(PARTICIPANT_SESSION_PREFIX);
+      (document.cookie ? document.cookie.split(";") : []).forEach(function (part) {
+        var name = part.trim().split("=")[0];
+        if (name.indexOf(encodedPrefix) === 0) {
+          safeCookieRemove(decodeURIComponent(name));
+        }
+      });
+    } catch (error) {
+      // Ignore cookie enumeration errors.
     }
   }
 
@@ -281,17 +348,18 @@
       return;
     }
     if (message.scope === "organizer") {
-      safeLocalStorageSet(ORGANIZER_SESSION_KEY, message.token);
+      safeStorageSet(ORGANIZER_SESSION_KEY, message.token);
     }
     if (message.scope === "participant") {
-      safeLocalStorageSet(participantSessionKey(message.response_token), message.token);
+      safeStorageSet(participantSessionKey(message.response_token), message.token);
     }
+    sendRestoredSessionInputs(true);
   }
 
   function clearTrustedSession(message) {
     var scope = message && message.scope ? message.scope : "all";
     if (scope === "organizer" || scope === "all") {
-      safeLocalStorageRemove(ORGANIZER_SESSION_KEY);
+      safeStorageRemove(ORGANIZER_SESSION_KEY);
       lastOrganizerSessionToken = "";
     }
     if (scope === "participant" || scope === "all") {
@@ -723,6 +791,9 @@
     restoreOrganizerDetails();
     registerShinyHandlers();
     sendRestoredSessionInputs(false);
+    window.setTimeout(function () {
+      sendRestoredSessionInputs(true);
+    }, 300);
   });
   document.addEventListener("shiny:bound", function () {
     restoreOrganizerDetails();
@@ -731,6 +802,9 @@
   document.addEventListener("shiny:connected", function () {
     registerShinyHandlers();
     sendRestoredSessionInputs(true);
+    window.setTimeout(function () {
+      sendRestoredSessionInputs(true);
+    }, 500);
   });
   if (window.MutationObserver) {
     new MutationObserver(function () {
