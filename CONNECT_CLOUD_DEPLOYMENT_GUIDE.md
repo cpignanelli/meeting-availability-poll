@@ -98,6 +98,8 @@ ALLOW_DEV_AUTH_CODE_DISPLAY=false
 
 `APP_AUTH_SECRET` is preferred for new deployments. `ORGANIZER_AUTH_SECRET` can remain set for backward compatibility with older deployments.
 
+Keep `APP_AUTH_SECRET` stable across republishes. It signs the short-lived browser sessions that let organizers and participants refresh or reopen the app without another code for `TRUSTED_SESSION_MINUTES`. If the secret changes, existing browser sessions are invalidated and users must request a new code.
+
 For MongoDB Atlas hosted persistence, add these variables too:
 
 ```text
@@ -210,6 +212,10 @@ Set `APP_BASE_URL` to the deployed app URL, then restart or republish.
 ### Organizer login does not send email
 
 Confirm that `APP_AUTH_SECRET` or `ORGANIZER_AUTH_SECRET` and all SMTP variables are set in the deployed content settings. Keep `ALLOW_DEV_AUTH_CODE_DISPLAY=false` on public deployments.
+
+### Users are asked for a code after every refresh
+
+Confirm `APP_AUTH_SECRET` is set and unchanged between deployments, `TRUSTED_SESSION_MINUTES` is not set to `0`, and the user is reopening the same deployed app URL in the same browser. Private browsing, cleared site data, changing the app URL, or sign-out clears the browser-local session buffer.
 
 ### MongoDB connection fails
 

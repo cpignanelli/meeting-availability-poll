@@ -92,8 +92,36 @@ testthat::test_that("trusted session tokens are scoped and expire", {
 
   testthat::expect_true(verified$valid)
   testthat::expect_equal(verified$email, "person@example.org")
+  organizer_token <- issue_trusted_session_token("organizer", "Organizer@Example.ORG", minutes = 10L)
+  organizer_verified <- verify_trusted_session_token(organizer_token, expected_scope = "organizer")
+  testthat::expect_true(organizer_verified$valid)
+  testthat::expect_equal(organizer_verified$email, "organizer@example.org")
+
+  expired_token <- issue_trusted_session_token("participant", "Person@Example.ORG", poll_id = 12L, minutes = -1L)
+  testthat::expect_false(verify_trusted_session_token(expired_token, expected_scope = "participant", poll_id = 12L)$valid)
   testthat::expect_false(verify_trusted_session_token(token, expected_scope = "participant", poll_id = 13L)$valid)
+  testthat::expect_false(verify_trusted_session_token(token, expected_scope = "organizer")$valid)
   testthat::expect_false(verify_trusted_session_token(sub(".$", "0", token), expected_scope = "participant", poll_id = 12L)$valid)
+})
+
+testthat::test_that("trusted session minutes default and clamp to safe bounds", {
+  old_value <- Sys.getenv("TRUSTED_SESSION_MINUTES", unset = NA_character_)
+  on.exit({
+    if (is.na(old_value)) {
+      Sys.unsetenv("TRUSTED_SESSION_MINUTES")
+    } else {
+      Sys.setenv(TRUSTED_SESSION_MINUTES = old_value)
+    }
+  }, add = TRUE)
+
+  Sys.unsetenv("TRUSTED_SESSION_MINUTES")
+  testthat::expect_equal(trusted_session_minutes(), 10L)
+  Sys.setenv(TRUSTED_SESSION_MINUTES = "0")
+  testthat::expect_equal(trusted_session_minutes(), 1L)
+  Sys.setenv(TRUSTED_SESSION_MINUTES = "90")
+  testthat::expect_equal(trusted_session_minutes(), 60L)
+  Sys.setenv(TRUSTED_SESSION_MINUTES = "not-a-number")
+  testthat::expect_equal(trusted_session_minutes(), 10L)
 })
 
 testthat::test_that("magic code email can be mocked and dev fallback is explicit", {

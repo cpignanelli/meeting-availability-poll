@@ -51,6 +51,31 @@
     }
   }
 
+  function currentRouteMode() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      if (params.get("respond")) {
+        return "respond";
+      }
+      if (params.get("admin")) {
+        return "admin";
+      }
+      if (params.get("create")) {
+        return "create";
+      }
+      if (params.get("organizer") === "login") {
+        return "organizer";
+      }
+      return "organizer";
+    } catch (error) {
+      return "organizer";
+    }
+  }
+
+  function isOrganizerRoute() {
+    return currentRouteMode() === "organizer";
+  }
+
   function participantSessionKey(responseToken) {
     return PARTICIPANT_SESSION_PREFIX + (responseToken || currentResponseToken());
   }
@@ -130,26 +155,88 @@
     }, 80);
   }
 
-  function sendRestoredSessionInputs() {
+  function base64UrlDecode(value) {
+    try {
+      var normalized = String(value || "").replace(/-/g, "+").replace(/_/g, "/");
+      while (normalized.length % 4) {
+        normalized += "=";
+      }
+      return window.atob(normalized);
+    } catch (error) {
+      return "";
+    }
+  }
+
+  function sessionTokenPayload(token) {
+    var parts = String(token || "").split(".");
+    if (parts.length !== 2) {
+      return null;
+    }
+    try {
+      return JSON.parse(base64UrlDecode(parts[0]));
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function sessionTokenIsExpired(token) {
+    var payload = sessionTokenPayload(token);
+    if (!payload || !payload.expires_at) {
+      return false;
+    }
+    var expiresAt = Date.parse(payload.expires_at);
+    return Number.isFinite(expiresAt) && expiresAt <= Date.now();
+  }
+
+  function restoredTokenFromStorage(key) {
+    var token = safeLocalStorageGet(key);
+    if (!token) {
+      return "";
+    }
+    if (sessionTokenIsExpired(token)) {
+      safeLocalStorageRemove(key);
+      return "";
+    }
+    return token;
+  }
+
+  function clearParticipantSessions(responseToken) {
+    if (responseToken) {
+      safeLocalStorageRemove(participantSessionKey(responseToken));
+      return;
+    }
+    try {
+      Object.keys(window.localStorage).forEach(function (key) {
+        if (key.indexOf(PARTICIPANT_SESSION_PREFIX) === 0) {
+          window.localStorage.removeItem(key);
+        }
+      });
+    } catch (error) {
+      safeLocalStorageRemove(participantSessionKey(""));
+    }
+  }
+
+  function sendRestoredSessionInputs(force) {
     if (!window.Shiny) {
       return;
     }
-    var organizerToken = safeLocalStorageGet(ORGANIZER_SESSION_KEY);
-    if (organizerToken && organizerToken !== lastOrganizerSessionToken) {
+    var shouldForce = !!force;
+    var organizerToken = isOrganizerRoute() ? restoredTokenFromStorage(ORGANIZER_SESSION_KEY) : "";
+    if (organizerToken && (shouldForce || organizerToken !== lastOrganizerSessionToken)) {
       lastOrganizerSessionToken = organizerToken;
       window.Shiny.setInputValue("organizer-trusted_session", organizerToken, { priority: "event" });
     }
     var responseToken = currentResponseToken();
     if (responseToken) {
-      var participantToken = safeLocalStorageGet(participantSessionKey(responseToken));
       var key = participantSessionKey(responseToken);
-      if (participantToken && (participantToken !== lastParticipantSessionToken || key !== lastParticipantSessionKey)) {
+      var participantToken = restoredTokenFromStorage(key);
+      if (participantToken && (shouldForce || participantToken !== lastParticipantSessionToken || key !== lastParticipantSessionKey)) {
         lastParticipantSessionToken = participantToken;
         lastParticipantSessionKey = key;
         window.Shiny.setInputValue("respond-trusted_session", participantToken, { priority: "event" });
       }
     }
-    scheduleDisplayTimezoneSync(false);
+    scheduleDisplayTimezoneSync(shouldForce);
   }
 
   function setSelectValue(select, value) {
@@ -208,7 +295,7 @@
       lastOrganizerSessionToken = "";
     }
     if (scope === "participant" || scope === "all") {
-      safeLocalStorageRemove(participantSessionKey(message ? message.response_token : ""));
+      clearParticipantSessions(message ? message.response_token : "");
       lastParticipantSessionKey = "";
       lastParticipantSessionToken = "";
     }
@@ -635,15 +722,15 @@
   document.addEventListener("DOMContentLoaded", function () {
     restoreOrganizerDetails();
     registerShinyHandlers();
-    sendRestoredSessionInputs();
+    sendRestoredSessionInputs(false);
   });
   document.addEventListener("shiny:bound", function () {
     restoreOrganizerDetails();
-    sendRestoredSessionInputs();
+    sendRestoredSessionInputs(false);
   });
   document.addEventListener("shiny:connected", function () {
     registerShinyHandlers();
-    sendRestoredSessionInputs();
+    sendRestoredSessionInputs(true);
   });
   if (window.MutationObserver) {
     new MutationObserver(function () {

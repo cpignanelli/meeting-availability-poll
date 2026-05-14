@@ -105,6 +105,25 @@ testthat::test_that("main owner can approve deny and revoke secondary owners", {
   })
 })
 
+testthat::test_that("trusted organizer session restore still depends on current owner access", {
+  with_owner_env({
+    conn <- make_test_connection()
+    on.exit(close_db_connection(conn), add = TRUE)
+
+    request <- create_or_update_owner_access_request(conn, "Approved", "Owner", "approved@example.org")
+    approve_owner_request(conn, request$request_id[[1]], "main.owner@example.org")
+    token <- issue_trusted_session_token("organizer", "approved@example.org", minutes = 10L)
+    restored <- verify_trusted_session_token(token, expected_scope = "organizer")
+
+    testthat::expect_true(restored$valid)
+    testthat::expect_true(owner_has_workspace_access(conn, restored$email))
+
+    owner <- list_approved_owners(conn, "main.owner@example.org")
+    revoke_approved_owner(conn, owner$owner_id[[1]], "main.owner@example.org")
+    testthat::expect_false(owner_has_workspace_access(conn, restored$email))
+  })
+})
+
 testthat::test_that("non-main organizers cannot review owner access", {
   with_owner_env({
     conn <- make_test_connection()

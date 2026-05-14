@@ -27,6 +27,7 @@ APP_MAIN_OWNER_EMAIL=owner@example.org
 
 # Set APP_AUTH_SECRET to a long random value. It signs short-lived browser sessions
 # and hashes email login codes. ORGANIZER_AUTH_SECRET remains a backward-compatible fallback.
+# Keep APP_AUTH_SECRET stable between deployments or users will need new login codes.
 APP_AUTH_SECRET=replace-with-a-different-private-random-value
 ORGANIZER_AUTH_SECRET=replace-with-a-different-private-random-value
 TRUSTED_SESSION_MINUTES=10

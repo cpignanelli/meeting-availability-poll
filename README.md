@@ -168,7 +168,7 @@ TRUSTED_SESSION_MINUTES=10
 
 Use `.Renviron.example` as a template. Do not commit `.Renviron`.
 
-The app root URL `/` opens the organizer email-code workspace. Poll creation in the normal workflow requires successful organizer login. A short-lived signed browser session avoids repeated codes after quick refreshes. The `?create=` URL remains available only as a hidden fallback/dev route.
+The app root URL `/` opens the organizer email-code workspace. Poll creation in the normal workflow requires successful organizer login. A short-lived signed browser session avoids repeated codes after quick refreshes or browser reopenings within `TRUSTED_SESSION_MINUTES`. The buffer is specific to the same browser, device, app URL, and stable `APP_AUTH_SECRET`; private browsing, cleared site data, a changed app URL, or rotating the secret will require a new code. The `?create=` URL remains available only as a hidden fallback/dev route.
 
 ## Sharing a live proof of concept
 
@@ -245,6 +245,7 @@ Implemented in this proof of concept:
 - Random 256-bit hex tokens for public and private links.
 - Admin tokens are stored as SHA-256 hashes, not raw tokens.
 - Organizer portal magic codes are stored only as hashes, expire after 10 minutes, and are limited to 5 verification attempts.
+- Organizer and participant email-code sign-ins issue signed browser-local session tokens for the configured `TRUSTED_SESSION_MINUTES` window. These tokens are revalidated by the server on restore and are cleared on sign-out, expiry, tampering, revoked organizer access, or changing participant email.
 - Organizer workspace access is restricted to the configured main owner and approved secondary owners.
 - Secondary owner access requests require first name, last name, email, email verification, and main-owner approval.
 - Public response links do not expose results.
